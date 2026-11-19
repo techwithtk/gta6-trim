@@ -227,3 +227,27 @@ button, a, select { cursor: pointer; }
 @media (max-width: 640px) { .ticket { -webkit-mask: none; mask: none; } }
 
 @media (prefers-reduced-motion: reduce) { .marquee { animation: none; } }
+
+/* ================= Paper chrome: checkout, login, legal ================= */
+/* Re-map the dark app tokens so shared utilities (text-muted, bg-surface, border-line, .panel) read as paper & ink. */
+.paper-chrome {
+  color-scheme: light;
+  --bg: var(--paper);
+  --surface: #fbf8f1;
+  --surface-2: #f5f0e6;
+  --surface-3: #ebe4d6;
+  --line: rgba(13, 13, 12, 0.16);
+  --line-strong: rgba(13, 13, 12, 0.34);
+  --text: var(--ink);
+  --muted: #4a4743;
+  --subtle: #6f6b64;
+  --pink: var(--fluo);
+  --green: #0f8a3c;
+}
+.paper-chrome .panel {
+  background: var(--surface);
+  border: 2px solid var(--ink);
+  border-radius: 0;
+  box-shadow: 6px 6px 0 var(--ink);
+}
+.paper-chrome h1 { font-family: var(--font-poster); font-weight: 900; text-transform: uppercase; letter-spacing: -0.01em; line-height: 0.9; }

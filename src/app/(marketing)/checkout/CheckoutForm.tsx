@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowLeft, Check, Lock, ShieldCheck } from "lucide-react";
-import { Segmented } from "@/components/forms";
 import { EASE_OUT, SPRING, T } from "@/components/motion";
 import { PLANS, type PlanId } from "@/lib/plans";
 import { SignOutButton } from "@clerk/nextjs";
@@ -17,7 +16,7 @@ const ERRORS: Record<string, string> = {
   lookup: "We couldn't confirm your payment yet. If you were charged, email hello@gta6trim.com and we'll sort it.",
   missing: "Checkout was closed before payment finished.",
   unknown_product: "We couldn't match that payment to a plan. Email hello@gta6trim.com.",
-  other_account: "That payment belongs to a different email. Sign in with the Google account you paid with.",
+  other_account: "That payment belongs to a different email. Sign in with the account you paid with.",
   not_live: "Payments open very soon. Nothing was charged.",
 };
 
@@ -62,11 +61,13 @@ export function CheckoutForm({ live }: { live: boolean }) {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-12 md:px-6 md:py-16">
-      <Link href="/#pricing" className="inline-flex items-center gap-1.5 text-sm text-muted transition-colors duration-150 hover:text-text">
+      <Link href="/#pricing" className="inline-flex items-center gap-1.5 font-mono text-[12px] font-semibold uppercase tracking-wider hover:text-[var(--fluo)]">
         <ArrowLeft className="size-4" /> Back to plans
       </Link>
-      <h1 className="mt-4 font-display text-3xl font-semibold tracking-[-0.02em]">Start your {plan.name} plan</h1>
-      <p className="mt-1 text-muted">After payment your dashboard opens right away.</p>
+      <h1 className="mt-5 text-[clamp(48px,7vw,84px)]">
+        Start your <span className="text-[var(--fluo)] [-webkit-text-stroke:2px_var(--ink)]">{plan.name}</span> plan
+      </h1>
+      <p className="mt-3 font-serif-i text-[clamp(22px,2.6vw,30px)] leading-none">…your dashboard opens right after payment.</p>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_400px]">
         {/* Plan summary */}
@@ -78,23 +79,30 @@ export function CheckoutForm({ live }: { live: boolean }) {
                 role="radio"
                 aria-checked={p.id === planId}
                 onClick={() => choose(p.id)}
-                className={`relative rounded-xl border px-3 py-3 text-left transition-colors duration-150 ${p.id === planId ? "border-pink/60 bg-pink/[0.05]" : "border-line hover:border-line-strong"}`}
+                className={`relative min-w-0 border-2 border-[var(--ink)] px-2 py-3 text-left sm:px-3 transition-transform duration-150 ${p.id === planId ? "bg-[var(--fluo)] shadow-[4px_4px_0_var(--ink)]" : "bg-[var(--paper)] hover:-translate-y-0.5"}`}
               >
-                {p.id === planId ? <motion.span layoutId="co-plan" className="absolute inset-0 rounded-xl ring-1 ring-pink" transition={SPRING} /> : null}
-                <div className="text-sm font-medium">{p.name}</div>
-                <div className="num mt-0.5 text-xs text-muted">${cycle === "yearly" ? p.yearly : p.monthly}/mo</div>
+                <div className="truncate font-poster text-[21px] font-black uppercase leading-none sm:text-[26px]">{p.name}</div>
+                <div className="num mt-1 text-xs font-semibold">${cycle === "yearly" ? p.yearly : p.monthly}/mo</div>
               </button>
             ))}
           </div>
 
           <div className="mt-5">
-            <Segmented id="co-cycle" value={cycle} onChange={(v) => setCycle(v as "monthly" | "yearly")} options={[["monthly", "Monthly"], ["yearly", "Yearly · save 20%"]]} />
+            <div className="isolate inline-flex border-2 border-[var(--ink)] bg-[var(--paper)] p-1 shadow-[4px_4px_0_var(--ink)]" role="radiogroup" aria-label="Billing cycle">
+              {([["monthly", "Monthly"], ["yearly", "Yearly −20%"]] as const).map(([v, l]) => (
+                <button key={v} role="radio" aria-checked={cycle === v} onClick={() => { setCycle(v); router.replace(`/checkout?plan=${planId}&cycle=${v}`, { scroll: false }); }}
+                  className={`relative px-4 py-2 font-mono text-[12px] font-bold uppercase tracking-wider ${cycle === v ? "text-[var(--paper)]" : "hover:text-[var(--fluo)]"}`}>
+                  {cycle === v ? <motion.span layoutId="co-cycle" className="absolute inset-0 -z-10 bg-[var(--ink)]" transition={SPRING} /> : null}
+                  {l}
+                </button>
+              ))}
+            </div>
           </div>
 
           <AnimatePresence mode="wait" initial={false}>
             <motion.ul key={planId} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, transition: { duration: T.quick } }} transition={{ duration: T.base, ease: EASE_OUT }} className="mt-6 space-y-2.5 text-sm">
               {plan.features.map((f) => (
-                <li key={f} className="flex items-start gap-2"><Check className="mt-0.5 size-4 shrink-0 text-green" /> {f}</li>
+                <li key={f} className="flex items-start gap-2"><Check className="mt-0.5 size-4 shrink-0 text-[var(--fluo)]" strokeWidth={3} /> {f}</li>
               ))}
             </motion.ul>
           </AnimatePresence>
@@ -102,14 +110,14 @@ export function CheckoutForm({ live }: { live: boolean }) {
 
         {/* Account + pay */}
         <section className="panel h-fit p-5 md:p-6">
-          <h2 className="font-display text-lg font-semibold">Your account</h2>
+          <h2 className="font-mono text-[12px] font-bold uppercase tracking-[0.16em]">Admit one · your account</h2>
           {params.get("need") === "plan" && signedIn && !account.plan ? (
-            <p className="mt-3 rounded-lg border border-pink/30 bg-pink/[0.06] px-3 py-2 text-xs text-text">Pick a plan to open your dashboard.</p>
+            <p className="mt-3 border border-pink/30 bg-pink/[0.06] px-3 py-2 text-xs text-text">Pick a plan to open your dashboard.</p>
           ) : null}
           {account.status === "loading" ? (
-            <div className="mt-4 h-11 animate-pulse rounded-lg bg-surface-2" />
+            <div className="mt-4 h-11 animate-pulse bg-surface-2" />
           ) : signedIn ? (
-            <div className="mt-4 flex items-center gap-3 rounded-lg border border-line bg-surface-2 px-3 py-2.5">
+            <div className="mt-4 flex items-center gap-3 border border-line bg-surface-2 px-3 py-2.5">
               {account.user!.picture ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={account.user!.picture} alt="" referrerPolicy="no-referrer" className="size-8 rounded-full" />
@@ -124,8 +132,8 @@ export function CheckoutForm({ live }: { live: boolean }) {
             </div>
           ) : (
             <>
-              <p className="mt-1.5 text-sm text-muted">Sign in or create a free account first (Google, Discord, Twitch or email). Your plan is saved to it, so you can log in from any device.</p>
-              <Link href={signInHref} className="mt-4 flex h-11 w-full items-center justify-center rounded-xl bg-white text-[15px] font-medium text-black transition-colors duration-150 hover:bg-white/90">
+              <p className="mt-1.5 text-sm text-muted">Sign in or create a free account first (Google, Twitch, Apple or email). Your plan is saved to it, so you can log in from any device.</p>
+              <Link href={signInHref} className="mt-4 flex h-12 w-full items-center justify-center border-2 border-[var(--ink)] bg-[var(--ink)] font-mono text-[13px] font-bold uppercase tracking-wider text-[var(--paper)] shadow-[4px_4px_0_var(--fluo)] transition-transform duration-150 hover:-translate-y-0.5">
                 Sign in to continue
               </Link>
             </>
@@ -152,15 +160,15 @@ export function CheckoutForm({ live }: { live: boolean }) {
           <button
             onClick={pay}
             disabled={!ready || !live || busy || !!account.plan}
-            className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl accent-bg text-[15px] font-medium text-white shadow-[0_10px_30px_-12px_rgba(255,46,136,0.9)] transition-opacity duration-150 disabled:opacity-35 disabled:shadow-none"
+            className="mt-5 inline-flex h-14 w-full items-center justify-center gap-2 border-2 border-[var(--ink)] bg-[var(--fluo)] px-3 font-poster text-lg font-black uppercase sm:text-2xl shadow-[6px_6px_0_var(--ink)] transition-transform duration-150 enabled:hover:-translate-x-0.5 enabled:hover:-translate-y-0.5 disabled:opacity-40 disabled:shadow-none"
           >
             <Lock className="size-4" /> {busy ? "Opening secure checkout…" : "Continue to secure payment"}
           </button>
           {error ? (
-            <p role="alert" className="mt-3 rounded-lg border border-red/30 bg-red/[0.06] px-3 py-2 text-xs text-red">{error}</p>
+            <p role="alert" className="mt-3 border border-red/30 bg-red/[0.06] px-3 py-2 text-xs text-red">{error}</p>
           ) : null}
           {!live ? (
-            <p className="mt-3 rounded-lg border border-orange/30 bg-orange/[0.06] px-3 py-2 text-xs text-orange">
+            <p className="mt-3 border border-orange/30 bg-orange/[0.06] px-3 py-2 text-xs text-orange">
               Payments are being connected and open very soon. Nothing will be charged yet.
             </p>
           ) : null}
