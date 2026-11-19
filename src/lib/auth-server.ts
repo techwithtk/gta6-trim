@@ -1,0 +1,48 @@
+import "server-only";
+import { auth, currentUser } from "@clerk/nextjs/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { findActiveSubscription } from "@/lib/dodo";
+import { SESSION_COOKIE, SESSION_MAX_AGE, cookieOptions, decodeSession, encodeSession, type Session } from "@/lib/session";
+
+/**
+ * Who you are comes from Clerk (Google, Discord, Twitch or email sign-in).
+ * What you paid for comes from Dodo, cached in the signed `gt_session` cookie and re-checked every few hours.
+ */
+
+/** The plan cookie, but only if it belongs to the user Clerk says is signed in. */
+export async function readSession(req: NextRequest): Promise<Session | null> {
+  const { userId } = await auth();
+  if (!userId) return null;
+  const s = await decodeSession(req.cookies.get(SESSION_COOKIE)?.value);
+  return s && s.uid === userId ? s : null;
+}
+
+/** Build a fresh session for the signed-in Clerk user by asking Dodo about their plan. */
+export async function buildSession(previous?: Session | null): Promise<Session | null> {
+  const user = await currentUser();
+  if (!user) return null;
+  const primary = user.emailAddresses.find((e) => e.id === user.primaryEmailAddressId) ?? user.emailAddresses[0];
+  if (!primary || primary.verification?.status !== "verified") return null;
+  const email = primary.emailAddress.toLowerCase();
+  const base = {
+    uid: user.id,
+    email,
+    name: user.fullName || user.username || email.split("@")[0],
+    picture: user.imageUrl,
+    exp: Date.now() + SESSION_MAX_AGE * 1000,
+  };
+  try {
+    const found = await findActiveSubscription(email);
+    return { ...base, plan: found?.plan ?? null, cycle: found?.cycle, sub: found?.sub, checkedAt: Date.now() };
+  } catch (e) {
+    // Dodo unreachable: keep the last known plan for the same user rather than locking a paying customer out.
+    console.error("[auth] plan lookup failed", e instanceof Error ? e.message : e);
+    const keep = previous && previous.uid === base.uid ? previous : null;
+    return { ...base, plan: keep?.plan ?? null, cycle: keep?.cycle, sub: keep?.sub, checkedAt: Date.now() };
+  }
+}
+
+export async function setSession(res: NextResponse, req: NextRequest, s: Session) {
+  res.cookies.set(SESSION_COOKIE, await encodeSession(s), cookieOptions(new URL(req.url).protocol === "https:"));
+  return res;
+}

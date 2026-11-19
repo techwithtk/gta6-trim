@@ -1,26 +1,229 @@
 @import "tailwindcss";
 
+/*
+  GTA6 Trim design system — "Broadcast control room"
+  - Neutral near-black surfaces, hairline borders, ONE accent (sunset orange→pink)
+  - Accent appears only where something is happening (spike, live, primary CTA)
+  - Motion: signature ease (0.2,0,0,1), durations 150 / 250 / 400ms.
+    Energetic springs are reserved for viral-moment events.
+*/
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #09090b;
+  --surface: #111114;
+  --surface-2: #17171b;
+  --surface-3: #1f1f24;
+  --line: rgba(255, 255, 255, 0.07);
+  --line-strong: rgba(255, 255, 255, 0.12);
+  --text: #fafafa;
+  --muted: #a1a1aa;
+  --subtle: #71717a;
+  --pink: #ff2e88;
+  --orange: #ff7a1a;
+  --cyan: #38bdf8;
+  --green: #22c55e;
+  --red: #ef4444;
+  --violet: #8b5cf6;
+
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --t-quick: 150ms;
+  --t-base: 250ms;
+  --t-slow: 400ms;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+  --color-pink: var(--pink);
+  --color-orange: var(--orange);
+  --color-cyan: var(--cyan);
+  --color-green: var(--green);
+  --color-red: var(--red);
+  --color-violet: var(--violet);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-space-grotesk);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+html { color-scheme: dark; }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-feature-settings: "cv11", "ss01";
 }
+
+::selection { background: rgba(255, 46, 136, 0.35); }
+
+:focus-visible {
+  outline: 2px solid var(--pink);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+button, a, select { cursor: pointer; }
+
+.num { font-family: var(--font-geist-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+
+.accent-text {
+  background: linear-gradient(90deg, var(--orange), var(--pink));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.accent-bg { background: linear-gradient(90deg, var(--orange), var(--pink)); }
+/* back-compat aliases used across pages */
+.sunset-text { background: linear-gradient(90deg, var(--orange), var(--pink)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.sunset-bg { background: linear-gradient(90deg, var(--orange), var(--pink)); }
+
+/* Card surface with a faint top highlight — gives depth without glow */
+.panel {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0) 40%), var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+/* ---------- Ambient layer (single, slow, low-contrast) ---------- */
+.ambient {
+  position: fixed; inset: 0; z-index: -10; pointer-events: none; overflow: hidden;
+}
+.ambient::before {
+  content: ""; position: absolute; width: 60vw; height: 60vw; top: -35vw; right: -15vw;
+  background: radial-gradient(closest-side, rgba(255, 46, 136, 0.10), transparent);
+  animation: drift-a 24s ease-in-out infinite alternate;
+}
+.ambient::after {
+  content: ""; position: absolute; width: 50vw; height: 50vw; bottom: -30vw; left: -10vw;
+  background: radial-gradient(closest-side, rgba(255, 122, 26, 0.06), transparent);
+  animation: drift-b 30s ease-in-out infinite alternate;
+}
+@keyframes drift-a { to { transform: translate(-8vw, 6vw); } }
+@keyframes drift-b { to { transform: translate(10vw, -5vw); } }
+
+/* ---------- Live indicators ---------- */
+@keyframes live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.live-dot { animation: live-pulse 1.6s ease-in-out infinite; }
+
+.live-ping { position: relative; }
+.live-ping::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; background: inherit;
+  animation: ping 1.6s var(--ease-out) infinite;
+}
+@keyframes ping { 0% { transform: scale(1); opacity: 0.7; } 100% { transform: scale(2.6); opacity: 0; } }
+
+/* Radar mark */
+.radar-sweep { background: conic-gradient(from 0deg, transparent 0deg 290deg, rgba(255, 46, 136, 0.5) 360deg); animation: spin 3s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Hot meter shimmer */
+.shimmer { position: relative; overflow: hidden; }
+.shimmer::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(100deg, transparent 20%, rgba(255, 255, 255, 0.45) 50%, transparent 80%);
+  transform: translateX(-100%); animation: shimmer 1.6s var(--ease) infinite;
+}
+@keyframes shimmer { to { transform: translateX(100%); } }
+
+/* Rotating accent border for "current" items */
+@property --angle { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
+.glow-border { position: relative; isolation: isolate; }
+.glow-border::before {
+  content: ""; position: absolute; inset: -1px; z-index: -1; border-radius: inherit; padding: 1px;
+  background: conic-gradient(from var(--angle), var(--orange), var(--pink), transparent 40%, transparent 60%, var(--orange));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  animation: rotate-angle 5s linear infinite;
+}
+@keyframes rotate-angle { to { --angle: 360deg; } }
+
+/* Shorts preview micro-motion */
+.caption-pop { display: inline-block; animation: caption-pop 2.4s var(--ease-out) infinite; }
+@keyframes caption-pop {
+  0% { transform: scale(0.6); opacity: 0; } 10% { transform: scale(1.06); opacity: 1; }
+  18%, 84% { transform: scale(1); opacity: 1; } 100% { transform: scale(0.96); opacity: 0; }
+}
+.cam-face { animation: talk 1.8s ease-in-out infinite; }
+@keyframes talk { 0%, 100% { transform: scale(1); } 35% { transform: scale(1.05); } }
+
+/* Faint film grain for media placeholders (static, no animation) */
+.grain {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.5'/></svg>");
+  mix-blend-mode: overlay; opacity: 0.18;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+}
+
+/* ---------- Scene art motion (subtle ambient layer) ---------- */
+.scene-animated .palm-sway { animation: palm-sway 6s ease-in-out infinite alternate; }
+@keyframes palm-sway { from { transform: rotate(-2deg); } to { transform: rotate(2.5deg); } }
+.scene-animated .reflect { animation: reflect 3.2s ease-in-out infinite; }
+@keyframes reflect { 0%, 100% { transform: scaleX(1); opacity: 0.5; } 50% { transform: scaleX(0.82); opacity: 0.25; } }
+.scene-animated .reflect { transform-box: fill-box; transform-origin: center; }
+.scene-animated .cloud-drift { animation: cloud-drift 40s linear infinite alternate; }
+.scene-animated .cloud-drift.slow { animation-duration: 60s; }
+@keyframes cloud-drift { to { transform: translateX(120px); } }
+.scene-animated .car-drive { animation: car-drive 14s linear infinite; }
+@keyframes car-drive { from { transform: translateX(-260px); } to { transform: translateX(1900px); } }
+.scene-animated .twinkle { animation: twinkle 3s ease-in-out infinite; }
+@keyframes twinkle { 50% { opacity: 0.1; } }
+.scene-animated .birds { animation: birds 30s linear infinite; }
+@keyframes birds { from { transform: translate(-200px, 20px); } to { transform: translate(1100px, -40px); } }
+
+/* ================= Landing page: "tabloid × editor" ================= */
+.lp {
+  --paper: #f2ede2;
+  --paper-2: #e9e2d3;
+  --ink: #0d0d0c;
+  --ink-2: #3b3936;
+  --fluo: #ff2e88;
+  --cobalt: #2336ff;
+  --acid: #d9ff3a;
+  background: var(--paper);
+  color: var(--ink);
+}
+.lp ::selection { background: var(--fluo); color: var(--paper); }
+.lp :focus-visible { outline: 2px solid var(--cobalt); outline-offset: 3px; }
+.font-poster { font-family: var(--font-poster); letter-spacing: -0.01em; }
+.font-serif-i { font-family: var(--font-serif); font-style: italic; letter-spacing: -0.01em; }
+
+/* newsprint grain + halftone */
+.paper-grain::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0; opacity: 0.35; mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.05  0 0 0 0 0.05  0 0 0 0 0.04  0 0 0 0.35 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+.halftone { background-image: radial-gradient(var(--ink) 1px, transparent 1.3px); background-size: 7px 7px; }
+.halftone-fluo { background-image: radial-gradient(var(--fluo) 1.2px, transparent 1.5px); background-size: 8px 8px; }
+
+/* hard-shadow "sticker" cards */
+.sticker { border: 2px solid var(--ink); background: var(--paper); box-shadow: 6px 6px 0 var(--ink); transition: transform 150ms var(--ease), box-shadow 150ms var(--ease); }
+.sticker:hover { transform: translate(-2px, -2px); box-shadow: 8px 8px 0 var(--ink); }
+
+/* broadcast ticker */
+.marquee { display: flex; width: max-content; animation: marquee 38s linear infinite; }
+.marquee:hover { animation-play-state: paused; }
+@keyframes marquee { to { transform: translateX(-50%); } }
+
+/* editor playhead sweep */
+@keyframes playhead { from { left: 0%; } to { left: 100%; } }
+
+/* event-ticket shape: notches top & bottom at the stub line */
+.ticket {
+  --notch: 14px;
+  -webkit-mask: radial-gradient(circle var(--notch) at calc(100% - 92px) 0, transparent 98%, #000) top / 100% 51% no-repeat,
+                radial-gradient(circle var(--notch) at calc(100% - 92px) 100%, transparent 98%, #000) bottom / 100% 51% no-repeat;
+          mask: radial-gradient(circle var(--notch) at calc(100% - 92px) 0, transparent 98%, #000) top / 100% 51% no-repeat,
+                radial-gradient(circle var(--notch) at calc(100% - 92px) 100%, transparent 98%, #000) bottom / 100% 51% no-repeat;
+}
+@media (max-width: 640px) { .ticket { -webkit-mask: none; mask: none; } }
+
+@media (prefers-reduced-motion: reduce) { .marquee { animation: none; } }
