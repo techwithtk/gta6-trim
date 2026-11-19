@@ -215,7 +215,7 @@ function Hero({ live }: { live: Live[] }) {
           <Cut delay={0.32}>…while it&apos;s still live.</Cut>
         </p>
         <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5, duration: 0.2 }} className="mt-7 max-w-[34rem] text-[17px] leading-relaxed text-[var(--ink-2)]">
-          GTA6 Trim watches live GTA 6 streams and long YouTube videos, catches the second chat loses its mind, cuts it to 9:16 with captions, and posts it to TikTok, YouTube, Instagram and Facebook. You just pick the stream.
+          GTA6 Trim watches live GTA 6 streams and long YouTube videos, catches the second chat loses its mind, cuts it to 9:16 with captions, and hands you Shorts ready for TikTok, YouTube, Instagram and Facebook. On Studio it posts them for you. You just pick the stream.
         </motion.p>
         <VideoCard />
 
@@ -231,7 +231,7 @@ function Hero({ live }: { live: Live[] }) {
         <dl className="mt-12 grid max-w-lg grid-cols-3 border-y-2 border-[var(--ink)]">
           <Fact k="Streams live" v={live.length ? String(live.length) : "—"} />
           <Fact k="Watching now" v={viewers ? fmtViewers(viewers) : "—"} border />
-          <Fact k="Accounts / platform" v={String(MAX_ACCOUNTS_PER_PLATFORM)} border />
+          <Fact k="Export" v="1080p" border />
         </dl>
       </div>
 
@@ -461,7 +461,7 @@ const TAKES = [
   { t: "Pick the stream", d: "Every live GTA 6 stream on Twitch (Kick & YouTube next), sorted by who's popping off. Or paste a long YouTube link." },
   { t: "We watch chat", d: "Message floods, emote walls and audio peaks mark the exact second something viral happens." },
   { t: "Cut & caption", d: "Facecam on top, gameplay below, animated captions burned in. Ready for vertical feeds." },
-  { t: "Post or stash", d: "Auto-post to up to 3 accounts per platform, or drop every clip into Drive, Dropbox or OneDrive." },
+  { t: "Download or post", d: "Download every Short or drop it into Drive, Dropbox or OneDrive. On Studio, auto-post to up to 3 accounts per platform." },
 ];
 
 function FilmStrip() {
@@ -533,7 +533,7 @@ function Features({ live }: { live: Live[] }) {
         <Card className="md:col-span-2" label="04 · Cloud storage" title="Clips land in your Drive, Dropbox or OneDrive">
           <MiniStorage />
         </Card>
-        <Card className="md:col-span-2" label="05 · Auto-post" title={`TikTok, Shorts, Reels, FB. ${MAX_ACCOUNTS_PER_PLATFORM} accounts each.`}>
+        <Card className="md:col-span-2" label="05 · Auto-post · Studio" title={`TikTok, Shorts, Reels, FB. ${MAX_ACCOUNTS_PER_PLATFORM} accounts each.`}>
           <MiniSlots />
         </Card>
         <Card className="md:col-span-6" label="06 · Rights-safe" title="We ask before you clip someone else's stream" wide>
@@ -792,7 +792,7 @@ function Ticket({ i, name, blurb, price, per, features, href, cta, tone, stamp, 
 
 const FAQS = [
   { q: "Do I need permission to clip other streamers?", a: "Yes. Clip your own streams, or streams whose creator allows clipping, like paid clipping campaigns. GTA6 Trim asks you to confirm before clipping someone else's stream or YouTube video." },
-  { q: "Which platforms can I auto-post to?", a: `TikTok, YouTube Shorts, Instagram Reels and Facebook Pages. Plans include 1, 2 or ${MAX_ACCOUNTS_PER_PLATFORM} accounts per platform. ${MAX_ACCOUNTS_PER_PLATFORM} is the maximum on any plan.` },
+  { q: "Which platforms can I auto-post to?", a: `Auto-posting is on the Studio plan: TikTok, YouTube Shorts, Instagram Reels and Facebook Pages, up to ${MAX_ACCOUNTS_PER_PLATFORM} accounts each, with scheduling. On Starter and Pro you download your Shorts (or save them to your cloud storage) and post them yourself.` },
   { q: "Where do the live streams come from?", a: "Live GTA 6 streams from Twitch today, with Kick and YouTube Live coming next. You choose which ones to clip." },
   { q: "Can I clip long YouTube videos?", a: "Yes. Paste a YouTube link from your channel, or one you have rights to, and get back a batch of captioned Shorts." },
   { q: "Can I cancel anytime?", a: "Yes. Monthly or yearly, cancel from your dashboard whenever you want." },

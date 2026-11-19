@@ -6,7 +6,7 @@
 
 **Clip the chaos while it's still live.**
 
-GTA6 Trim watches live GTA 6 streams and long YouTube videos, catches the second chat loses its mind, cuts it to 9:16 with captions, and posts it to TikTok, YouTube Shorts, Instagram Reels and Facebook. You just pick the stream.
+GTA6 Trim watches live GTA 6 streams and long YouTube videos, catches the second chat loses its mind, cuts it to 9:16 with captions, and hands you Shorts ready for TikTok, YouTube Shorts, Instagram Reels and Facebook. On Studio, it posts them for you. You just pick the stream.
 
 [**🌐 gta6trim.com**](https://gta6trim.com) · [Pricing](https://gta6trim.com/#pricing) · [X / Twitter](https://x.com/iqtauhid) · [Facebook](https://www.facebook.com/share/1GjqN4Kegq/)
 
@@ -34,7 +34,7 @@ Doing it by hand means watching 10 streams at once, scrubbing VODs, cropping to 
 | **1. Pick a stream** | Live Radar lists every GTA 6 stream on Twitch right now, ranked by viewers and chat hype. Or paste a long YouTube video. |
 | **2. It finds the moments** | Chat activity spikes (laughs, "CLIP IT", emote floods) mark the best seconds. Each moment gets a hype score. |
 | **3. It edits the Short** | Cut, reframe to 9:16 (the crop follows the action), add captions, export in 1080p with no watermark. |
-| **4. It posts** | Approve in the Clip Queue, or let 8.5+ clips from your own channels auto-post to TikTok, YouTube Shorts, Instagram Reels and Facebook. |
+| **4. Download or post** | Approve in the Clip Queue and download, or save to your cloud storage. On **Studio**, 8.5+ clips from your own channels auto-post to TikTok, YouTube Shorts, Instagram Reels and Facebook. |
 
 <p align="center"><img src="docs/auto-edit.png" alt="Auto-edit timeline: find the moment, cut, reframe to 9:16, caption, export" width="100%"></p>
 
@@ -48,7 +48,7 @@ Doing it by hand means watching 10 streams at once, scrubbing VODs, cropping to 
 
 <img src="docs/live-radar.png" alt="Live Radar dashboard" width="100%">
 
-**Clip Queue**: review, edit captions and post in one click
+**Clip Queue**: review, edit captions, then download (or auto-post on Studio)
 
 <img src="docs/clip-queue.png" alt="Clip Queue with vertical Shorts ready to post" width="100%">
 
@@ -64,7 +64,8 @@ Doing it by hand means watching 10 streams at once, scrubbing VODs, cropping to 
 - ✂️ **Auto-edit**: cut, 9:16 reframe that follows the action, 1080p, no watermark
 - 💬 **AI captions**: 8 caption styles plus your brand colours
 - #️⃣ **AI titles & hashtags**: written separately for each platform
-- 📤 **Auto-post & scheduling**: TikTok, YouTube Shorts, Instagram Reels and Facebook, up to 3 accounts per platform
+- ⬇️ **Download-ready Shorts**: every plan gets 1080p vertical files to post wherever you want
+- 📤 **Auto-post & scheduling** *(Studio)*: TikTok, YouTube Shorts, Instagram Reels and Facebook, up to 3 accounts per platform
 - ☁️ **Cloud storage**: save clips to Google Drive, Dropbox, OneDrive or Box
 - 👥 **Teams**: seats and performance analytics for agencies
 
@@ -81,8 +82,10 @@ Doing it by hand means watching 10 streams at once, scrubbing VODs, cropping to 
 | Clips / month | 200 | 600 | 2,000 |
 | AI caption styles | 4 | 8 + brand colours | 8 + brand colours |
 | AI titles & hashtags | — | ✓ | ✓ |
-| Accounts per platform | 1 | 2 | 3 |
-| Scheduling | — | ✓ | ✓ |
+| Download Shorts | ✓ | ✓ | ✓ |
+| **Auto-post** to TikTok, YouTube, Instagram & Facebook | — | — | ✓ |
+| Accounts per platform | — | — | 3 |
+| Scheduling | — | — | ✓ |
 | Storage | Google Drive | + Dropbox, OneDrive | + Box |
 | Team seats | 1 | 1 | 3 |
 
@@ -141,7 +144,7 @@ To create the 6 Dodo subscription products (3 plans × monthly/yearly), run `nod
 - [x] Dashboard: radar, import, queue, posted, integrations, billing
 - [ ] Clipping worker: chat-spike detection, cut, 9:16 reframe, captions
 - [ ] YouTube long-form import worker
-- [ ] Auto-posting to TikTok, YouTube, Instagram and Facebook
+- [ ] Auto-posting to TikTok, YouTube, Instagram and Facebook (Studio)
 - [ ] Kick and YouTube Live support
 
 ## Follow

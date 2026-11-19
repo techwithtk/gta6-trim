@@ -132,7 +132,7 @@ export default function BillingPage() {
 
       <p className="mt-4 flex items-center gap-2 text-xs text-subtle">
         <ShieldCheck className="size-3.5" />
-        Every plan: no watermark, 1080p export, live stream directory, and up to {MAX_ACCOUNTS_PER_PLATFORM} accounts per social platform.
+        Every plan: no watermark, 1080p export, clip downloads and the live stream directory. Auto-posting (up to {MAX_ACCOUNTS_PER_PLATFORM} accounts per platform) is on Studio.
       </p>
 
       {/* Comparison */}

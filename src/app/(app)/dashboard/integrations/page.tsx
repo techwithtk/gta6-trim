@@ -128,12 +128,28 @@ export default function IntegrationsPage() {
         right={
           <span className="inline-flex items-center gap-1.5 text-xs text-subtle">
             <ShieldCheck className="size-3.5" />
-            {plan.name}: {perPlatform} per platform · max {MAX_ACCOUNTS_PER_PLATFORM} on any plan
+            {plan.limits.autopost ? `${plan.name}: ${perPlatform} per platform` : "Studio plan"}
           </span>
         }
       >
         Auto-post accounts
       </SectionLabel>
+      {!plan.limits.autopost ? (
+        <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: T.slow, ease: EASE_OUT, delay: 0.15 }} className="panel flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
+          <div className="flex -space-x-2">
+            {SOCIAL.map((p) => <Mark key={p.id} letter={p.letter} color={p.color} />)}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium">Auto-posting is on the Studio plan</div>
+            <p className="mt-1 text-xs text-subtle">
+              On {plan.name}, download your Shorts (or save them to your cloud storage above) and post them yourself. Studio posts and schedules them to TikTok, YouTube Shorts, Instagram Reels and Facebook for you, with up to {MAX_ACCOUNTS_PER_PLATFORM} accounts on each.
+            </p>
+          </div>
+          <Link href="/dashboard/billing" className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-white px-4 text-sm font-medium text-black transition-opacity duration-150 hover:opacity-90">
+            Upgrade to Studio
+          </Link>
+        </motion.section>
+      ) : (
       <div className="grid gap-4 lg:grid-cols-2">
         {SOCIAL.map((p, i) => {
           const list = accounts[p.id];
@@ -205,6 +221,7 @@ export default function IntegrationsPage() {
           );
         })}
       </div>
+      )}
 
       <p className="mt-6 flex items-start gap-2 text-xs text-subtle">
         <Info className="mt-0.5 size-3.5 shrink-0" />

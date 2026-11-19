@@ -5,7 +5,7 @@ export type PlanId = "starter" | "pro" | "studio";
 export type SocialPlatform = "instagram" | "facebook" | "youtube" | "tiktok";
 export type StorageProvider = "gdrive" | "dropbox" | "onedrive" | "box";
 
-/** Hard product rule: never more than 3 accounts per social platform, on any plan. */
+/** Hard product rule: never more than 3 accounts per social platform. Auto-posting is a Studio (and Enterprise) feature only. */
 export const MAX_ACCOUNTS_PER_PLATFORM = 3;
 
 export type Plan = {
@@ -20,7 +20,8 @@ export type Plan = {
     ytImports: number; // YouTube long-form links per month
     ytMaxMinutes: number; // max length per imported video
     clips: number; // clips per month
-    accountsPerPlatform: number; // ≤ MAX_ACCOUNTS_PER_PLATFORM
+    autopost: boolean; // can connect social accounts and post/schedule from GTA6 Trim
+    accountsPerPlatform: number; // ≤ MAX_ACCOUNTS_PER_PLATFORM, 0 when autopost is off
     storage: StorageProvider[];
     captionStyles: number; // number of caption presets unlocked
     seats: number;
@@ -35,7 +36,7 @@ export const PLANS: Plan[] = [
     blurb: "For new clippers getting their first pages growing.",
     monthly: 49,
     yearly: 39,
-    limits: { liveSessions: 2, ytImports: 20, ytMaxMinutes: 120, clips: 200, accountsPerPlatform: 1, storage: ["gdrive"], captionStyles: 4, seats: 1 },
+    limits: { liveSessions: 2, ytImports: 20, ytMaxMinutes: 120, clips: 200, autopost: false, accountsPerPlatform: 0, storage: ["gdrive"], captionStyles: 4, seats: 1 },
     features: [
       "Live GTA 6 directory · Twitch (Kick & YouTube Live soon)",
       "2 live streams clipped at once",
@@ -43,7 +44,7 @@ export const PLANS: Plan[] = [
       "200 clips / month · 1080p, no watermark",
       "AI captions · 4 styles",
       "Save to Google Drive",
-      "Auto-post to TikTok, YouTube Shorts, Instagram Reels & Facebook · 1 account each",
+      "Download your Shorts and post them yourself",
     ],
   },
   {
@@ -53,16 +54,15 @@ export const PLANS: Plan[] = [
     monthly: 99,
     yearly: 79,
     highlight: true,
-    limits: { liveSessions: 5, ytImports: 60, ytMaxMinutes: 240, clips: 600, accountsPerPlatform: 2, storage: ["gdrive", "dropbox", "onedrive"], captionStyles: 8, seats: 1 },
+    limits: { liveSessions: 5, ytImports: 60, ytMaxMinutes: 240, clips: 600, autopost: false, accountsPerPlatform: 0, storage: ["gdrive", "dropbox", "onedrive"], captionStyles: 8, seats: 1 },
     features: [
       "Everything in Starter",
       "5 live streams clipped at once",
       "60 YouTube long-form videos / month (up to 4h each)",
       "600 clips / month",
       "AI captions · all 8 styles + brand colors",
-      "AI titles & hashtags written for each platform",
+      "AI titles & hashtags written for each platform, ready to copy",
       "Save to Google Drive, Dropbox & OneDrive",
-      "Auto-post + scheduling · 2 accounts each on TikTok, YouTube, Instagram & Facebook",
     ],
   },
   {
@@ -71,13 +71,13 @@ export const PLANS: Plan[] = [
     blurb: "For teams and agencies running many pages.",
     monthly: 199,
     yearly: 159,
-    limits: { liveSessions: 10, ytImports: 200, ytMaxMinutes: 360, clips: 2000, accountsPerPlatform: 3, storage: ["gdrive", "dropbox", "onedrive", "box"], captionStyles: 8, seats: 3 },
+    limits: { liveSessions: 10, ytImports: 200, ytMaxMinutes: 360, clips: 2000, autopost: true, accountsPerPlatform: 3, storage: ["gdrive", "dropbox", "onedrive", "box"], captionStyles: 8, seats: 3 },
     features: [
       "Everything in Pro",
       "10 live streams clipped at once",
       "200 YouTube long-form videos / month (up to 6h each)",
       "2,000 clips / month · priority processing",
-      "Auto-post · 3 accounts each on TikTok, YouTube, Instagram & Facebook (max)",
+      "Auto-post + scheduling to TikTok, YouTube Shorts, Instagram Reels & Facebook · 3 accounts each",
       "Save to Google Drive, Dropbox, OneDrive & Box · auto-upload folders",
       "3 team seats · performance analytics",
     ],
@@ -112,8 +112,9 @@ export const COMPARISON: { label: string; values: (p: Plan) => string | boolean 
   { label: "Google Drive", values: (p) => p.limits.storage.includes("gdrive") },
   { label: "Dropbox & OneDrive", values: (p) => p.limits.storage.includes("dropbox") },
   { label: "Box", values: (p) => p.limits.storage.includes("box") },
-  { label: "Auto-post: Instagram, Facebook, YouTube, TikTok", values: () => true },
-  { label: "Accounts per platform", values: (p) => `${p.limits.accountsPerPlatform}` },
-  { label: "Post scheduling", values: (p) => p.id !== "starter" },
+  { label: "Download clips", values: () => true },
+  { label: "Auto-post: TikTok, YouTube, Instagram, Facebook", values: (p) => p.limits.autopost },
+  { label: "Accounts per platform", values: (p) => (p.limits.autopost ? `${p.limits.accountsPerPlatform}` : false) },
+  { label: "Post scheduling", values: (p) => p.limits.autopost },
   { label: "Team seats", values: (p) => `${p.limits.seats}` },
 ];

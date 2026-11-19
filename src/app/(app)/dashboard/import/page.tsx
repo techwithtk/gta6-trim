@@ -179,13 +179,23 @@ export default function ImportPage() {
             </Field>
           </div>
 
-          <label className="mt-5 flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-line bg-surface-2 px-4 py-3">
-            <span>
-              <span className="block text-sm font-medium">Auto-post when ready</span>
-              <span className="block text-xs text-subtle">Clips scoring 8.5+ post to your connected accounts. Others wait in the queue.</span>
-            </span>
-            <Toggle on={autopost} onChange={setAutopost} label="Auto-post when ready" />
-          </label>
+          {plan.limits.autopost ? (
+            <label className="mt-5 flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-line bg-surface-2 px-4 py-3">
+              <span>
+                <span className="block text-sm font-medium">Auto-post when ready</span>
+                <span className="block text-xs text-subtle">Clips scoring 8.5+ post to your connected accounts. Others wait in the queue.</span>
+              </span>
+              <Toggle on={autopost} onChange={setAutopost} label="Auto-post when ready" />
+            </label>
+          ) : (
+            <div className="mt-5 flex items-center justify-between gap-4 rounded-xl border border-line bg-surface-2 px-4 py-3">
+              <span>
+                <span className="flex items-center gap-1.5 text-sm font-medium"><Lock className="size-3.5 text-subtle" /> Auto-post when ready</span>
+                <span className="block text-xs text-subtle">Your Shorts land in the Clip Queue to download. Auto-posting is on Studio.</span>
+              </span>
+              <Link href="/dashboard/billing" className="shrink-0 text-xs text-text underline underline-offset-2">Upgrade</Link>
+            </div>
+          )}
 
           <label className="mt-4 flex cursor-pointer items-start gap-3 text-sm text-muted">
             <input type="checkbox" checked={rights} onChange={(e) => setRights(e.target.checked)} className="mt-0.5 size-4 accent-[var(--pink)]" />

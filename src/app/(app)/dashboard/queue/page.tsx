@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Check, X, Captions, Play, Clock } from "lucide-react";
+import { Check, X, Captions, Play, Clock, Download } from "lucide-react";
+import { usePlan } from "@/lib/account";
 import { QUEUE } from "@/lib/mock";
 import { PageTitle, VerticalClip } from "@/components/ui";
 import { CaptionEditor, type EditableClip } from "@/components/CaptionEditor";
@@ -14,6 +15,7 @@ type State = "pending" | "approved" | "rejected";
 export default function QueuePage() {
   const [items, setItems] = useState(QUEUE.map((c) => ({ ...c, styleId: "pop", state: "pending" as State })));
   const [editing, setEditing] = useState<EditableClip | null>(null);
+  const canPost = usePlan().limits.autopost;
   const pending = items.filter((i) => i.state === "pending").length;
   const set = (id: string, state: State) => setItems((p) => p.map((i) => (i.id === id ? { ...i, state } : i)));
 
@@ -25,7 +27,7 @@ export default function QueuePage() {
       <PageTitle
         title="Clip Queue"
         art="neon"
-        sub={pending ? `${pending} clips waiting for review · 8.5+ from owned channels auto-post` : "All caught up · new clips appear here as moments are detected"}
+        sub={pending ? canPost ? `${pending} clips waiting for review · 8.5+ from owned channels auto-post` : `${pending} clips waiting for review · approve to download` : "All caught up · new clips appear here as moments are detected"}
         right={
           <motion.button
             whileTap={{ scale: 0.97 }}
@@ -71,8 +73,8 @@ export default function QueuePage() {
                             </svg>
                           </motion.div>
                           <motion.div className="text-center" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: T.base, ease: EASE_OUT, delay: 0.2 }}>
-                            <div className="text-sm font-medium">Scheduled</div>
-                            <div className="mt-0.5 text-xs text-muted">{c.platforms.map((p) => PLATFORM_LABEL[p]).join(" · ")}</div>
+                            <div className="text-sm font-medium">{canPost ? "Scheduled" : "Ready to download"}</div>
+                            <div className="mt-0.5 text-xs text-muted">{canPost ? c.platforms.map((p) => PLATFORM_LABEL[p]).join(" · ") : "1080p · 9:16 · captions burned in"}</div>
                           </motion.div>
                         </div>
                       </motion.div>
@@ -93,7 +95,7 @@ export default function QueuePage() {
                     {c.state === "pending" ? (
                       <motion.div key="actions" exit={{ opacity: 0, transition: { duration: T.quick } }} className="mt-auto grid grid-cols-[1fr_auto_auto] gap-2 pt-4">
                         <motion.button whileTap={{ scale: 0.97 }} transition={{ duration: T.quick }} onClick={() => set(c.id, "approved")} className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-white text-sm font-medium text-black transition-colors duration-150 hover:bg-white/90">
-                          <Check className="size-4" /> Post
+                          {canPost ? <><Check className="size-4" /> Post</> : <><Download className="size-4" /> Download</>}
                         </motion.button>
                         <motion.button whileTap={{ scale: 0.95 }} onClick={() => setEditing(c)} className="grid size-9 place-items-center rounded-lg border border-line-strong text-muted transition-colors duration-150 hover:bg-white/[0.05] hover:text-text" aria-label={`Edit captions for ${c.title}`} title="Captions & post text">
                           <Captions className="size-4" strokeWidth={1.75} />
