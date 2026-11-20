@@ -4,7 +4,9 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, Check, Info, Loader2, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { useUser } from "@clerk/nextjs";
 import { usePlan } from "@/lib/account";
+import { refreshDrive, useDrive } from "@/lib/drive";
 import { MAX_ACCOUNTS_PER_PLATFORM, type SocialPlatform } from "@/lib/plans";
 import { PLATFORM_META, refreshAccounts, useSocial, type SocialAccount } from "@/lib/social";
 
@@ -172,7 +174,8 @@ function Integrations() {
         <span className="h-px flex-1 bg-line" />
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
-        {STORAGE.map((s) => (
+        <GoogleDriveCard />
+        {STORAGE.filter((s) => s.name !== "Google Drive").map((s) => (
           <div key={s.name} className="flex items-center gap-3 border border-line bg-surface p-4 opacity-70">
             <Mark letter={s.letter} color={s.color} size={32} />
             <span className="text-sm">{s.name}</span>
@@ -180,7 +183,61 @@ function Integrations() {
           </div>
         ))}
       </div>
+      <p className="mt-3 text-xs text-subtle">Clips go into a &quot;GTA6 Trim&quot; folder in your Drive. We can only see files we save there, never the rest of your Drive.</p>
     </>
+  );
+}
+
+const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+
+/** Google Drive: asks Google (through our sign-in provider) for permission to create files in the user's Drive. */
+function GoogleDriveCard() {
+  const drive = useDrive();
+  const { user, isLoaded } = useUser();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("drive") === "1") refreshDrive();
+  }, []);
+
+  const connect = async () => {
+    if (!user) return;
+    setBusy(true); setError(null);
+    try {
+      const back = `${window.location.origin}/dashboard/integrations?drive=1`;
+      const google = user.externalAccounts.find((a) => a.provider === "google");
+      const acct = google
+        ? await google.reauthorize({ additionalScopes: [DRIVE_SCOPE], redirectUrl: back })
+        : await user.createExternalAccount({ strategy: "oauth_google", additionalScopes: [DRIVE_SCOPE], redirectUrl: back });
+      const url = acct.verification?.externalVerificationRedirectURL;
+      if (!url) throw new Error("Google didn't return a sign-in page. Try again.");
+      window.location.assign(url.toString());
+    } catch (e) {
+      const msg = (e as { errors?: { longMessage?: string; message?: string }[] })?.errors?.[0];
+      setError(msg?.longMessage ?? msg?.message ?? (e instanceof Error ? e.message : "Couldn't start connecting."));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="border border-line bg-surface p-4">
+      <div className="flex items-center gap-3">
+        <Mark letter="G" color="#1fa463" size={32} />
+        <span className="text-sm">Google Drive</span>
+        {drive.connected ? <span className="ml-auto inline-flex items-center gap-1 text-xs text-green"><Check className="size-3" /> Connected</span> : null}
+      </div>
+      {!drive.ready ? (
+        <div className="mt-3 h-9 animate-pulse bg-surface-2" />
+      ) : drive.connected ? (
+        <p className="mt-3 text-xs text-muted">Press <span className="text-text">Drive</span> under any clip, or <span className="text-text">Save all to Drive</span>.</p>
+      ) : (
+        <button onClick={connect} disabled={busy || !isLoaded} className="mt-3 inline-flex h-9 items-center gap-1.5 border border-white/25 px-3 text-sm transition-colors duration-150 hover:border-pink hover:text-pink disabled:opacity-40">
+          {busy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />} Connect Google Drive
+        </button>
+      )}
+      {error ? <p className="mt-2 text-xs text-red">{error}</p> : null}
+    </div>
   );
 }
 

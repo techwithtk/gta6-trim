@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Download, Play, Send, X } from "lucide-react";
+import { Check, Download, HardDriveUpload, Loader2, Play, Send, X } from "lucide-react";
 import type { Clip } from "@/lib/jobs";
 import { usePlan } from "@/lib/account";
 import { postFor, postLabel, useSocial } from "@/lib/social";
 import { PostModal } from "@/components/PostModal";
+import { saveToDrive, useDrive } from "@/lib/drive";
 
 const fmtAt = (s: number) => {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
@@ -18,8 +19,28 @@ export function ClipGrid({ jobId, clips, onPlay }: { jobId: string; clips: Clip[
   const postable = usePlan().limits.autopost;
   const social = useSocial(postable);
   const [target, setTarget] = useState<Clip | null>(null);
+  const drive = useDrive();
+  const [saved, setSaved] = useState<Record<string, { state: "saving" | "done" | "error"; link?: string; error?: string }>>({});
+  const toDrive = async (files: string[]) => {
+    setSaved((s) => ({ ...s, ...Object.fromEntries(files.map((f) => [f, { state: "saving" as const }])) }));
+    try {
+      const res = await saveToDrive(jobId, files);
+      setSaved((s) => ({ ...s, ...Object.fromEntries(res.map((r) => [r.file, r.error ? { state: "error" as const, error: r.error } : { state: "done" as const, link: r.link }])) }));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Couldn't save to Drive.";
+      setSaved((s) => ({ ...s, ...Object.fromEntries(files.map((f) => [f, { state: "error" as const, error: msg }])) }));
+    }
+  };
+  const unsaved = clips.filter((c) => !saved[c.file]).map((c) => c.file);
   return (
     <>
+    {drive.connected && clips.length > 1 && unsaved.length ? (
+      <div className="mb-2 flex justify-end">
+        <button onClick={() => toDrive(unsaved)} className="inline-flex items-center gap-1.5 font-mono text-[10.5px] font-semibold uppercase tracking-wider text-muted hover:text-text">
+          <HardDriveUpload className="size-3.5" /> Save all {unsaved.length} to Drive
+        </button>
+      </div>
+    ) : null}
     <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
       {clips.map((c) => (
         <li key={c.file} className="min-w-0">
@@ -36,6 +57,7 @@ export function ClipGrid({ jobId, clips, onPlay }: { jobId: string; clips: Clip[
             <a href={`/api/import/${jobId}/${c.file}?download=1`} className="inline-flex items-center gap-1 font-mono text-[10.5px] font-semibold uppercase tracking-wider text-text underline-offset-2 hover:text-pink hover:underline">
               <Download className="size-3" /> Download
             </a>
+            {drive.connected ? <DriveButton s={saved[c.file]} onSave={() => toDrive([c.file])} /> : null}
             {postable ? (
               <button onClick={() => setTarget(c)} className="inline-flex items-center gap-1 font-mono text-[10.5px] font-semibold uppercase tracking-wider text-pink underline-offset-2 hover:underline">
                 <Send className="size-3" /> Post
@@ -48,6 +70,17 @@ export function ClipGrid({ jobId, clips, onPlay }: { jobId: string; clips: Clip[
     </ul>
     {postable ? <PostModal target={target ? { jobId, clip: target } : null} accounts={social.accounts} posts={social.posts} onClose={() => setTarget(null)} /> : null}
     </>
+  );
+}
+
+function DriveButton({ s, onSave }: { s?: { state: "saving" | "done" | "error"; link?: string; error?: string }; onSave: () => void }) {
+  const cls = "inline-flex items-center gap-1 font-mono text-[10.5px] font-semibold uppercase tracking-wider";
+  if (s?.state === "saving") return <span className={`${cls} text-subtle`}><Loader2 className="size-3 animate-spin" /> Saving</span>;
+  if (s?.state === "done") return s.link ? <a href={s.link} target="_blank" rel="noreferrer" className={`${cls} text-green hover:underline`}><Check className="size-3" /> In Drive</a> : <span className={`${cls} text-green`}><Check className="size-3" /> In Drive</span>;
+  return (
+    <button onClick={onSave} title={s?.error} className={`${cls} ${s?.state === "error" ? "text-red" : "text-text"} underline-offset-2 hover:text-pink hover:underline`}>
+      <HardDriveUpload className="size-3" /> {s?.state === "error" ? "Retry Drive" : "Drive"}
+    </button>
   );
 }
 
