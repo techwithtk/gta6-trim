@@ -20,7 +20,14 @@ export default function LoginPage() {
             fallbackRedirectUrl="/dashboard"
             appearance={{
               theme: neobrutalism,
-              variables: { colorPrimary: "#ff2e88", colorBackground: "#fbf8f1", colorForeground: "#0d0d0c", colorInput: "#ffffff", borderRadius: "0" },
+              // Override every colour the site-wide dark theme sets, or inputs inherit white text on this white form.
+              variables: {
+                colorPrimary: "#ff2e88", colorPrimaryForeground: "#ffffff",
+                colorBackground: "#fbf8f1", colorForeground: "#0d0d0c",
+                colorInput: "#ffffff", colorInputForeground: "#0d0d0c",
+                colorNeutral: "#0d0d0c", colorMutedForeground: "#4a4743", colorMuted: "#f5f0e6",
+                borderRadius: "0",
+              },
             }}
           />
         </Suspense>

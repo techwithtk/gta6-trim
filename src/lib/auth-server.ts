@@ -31,6 +31,11 @@ export async function buildSession(previous?: Session | null): Promise<Session |
     picture: user.imageUrl,
     exp: Date.now() + SESSION_MAX_AGE * 1000,
   };
+  // Local testing only: DEV_PLAN=starter|pro|studio in .env.local gives the signed-in user that plan. Never used in production.
+  const devPlan = process.env.NODE_ENV !== "production" ? process.env.DEV_PLAN : undefined;
+  if (devPlan === "starter" || devPlan === "pro" || devPlan === "studio") {
+    return { ...base, plan: devPlan, cycle: "monthly", checkedAt: Date.now() };
+  }
   try {
     const found = await findActiveSubscription(email);
     return { ...base, plan: found?.plan ?? null, cycle: found?.cycle, sub: found?.sub, checkedAt: Date.now() };

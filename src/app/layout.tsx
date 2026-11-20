@@ -33,7 +33,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           signInUrl="/login"
           signUpUrl="/login"
           afterSignOutUrl="/api/auth/logout"
-          appearance={{ theme: dark, variables: { colorPrimary: "#ff2e88", colorBackground: "#111114", borderRadius: "0.75rem" } }}
+          appearance={{ theme: dark, cssLayerName: "clerk", variables: { colorPrimary: "#ff2e88", colorBackground: "#111114", borderRadius: "0.75rem" } }}
         >
           {children}
         </ClerkProvider>

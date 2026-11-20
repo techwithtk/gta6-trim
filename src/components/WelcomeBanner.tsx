@@ -22,7 +22,7 @@ export function WelcomeBanner() {
           <PartyPopper className="mt-0.5 size-4 shrink-0 text-green" />
           <p className="flex-1">
             <span className="font-medium text-text">Payment confirmed. Welcome to GTA6 Trim.</span>{" "}
-            <span className="text-muted">Your receipt is on its way by email. Pick a live stream below to start clipping.</span>
+            <span className="text-muted">Your receipt is on its way by email. Paste a YouTube link or upload a video below to make your first clips.</span>
           </p>
           <button onClick={() => setOpen(false)} aria-label="Dismiss" className="text-muted hover:text-text">
             <X className="size-4" />

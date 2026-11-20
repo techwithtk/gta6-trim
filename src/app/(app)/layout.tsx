@@ -1,15 +1,21 @@
 import { Suspense } from "react";
+import { Big_Shoulders } from "next/font/google";
 import { Shell } from "@/components/Shell";
 import { WelcomeBanner } from "@/components/WelcomeBanner";
+
+// Same poster headline font as the landing page, so the dashboard reads as the same brand.
+const poster = Big_Shoulders({ variable: "--font-poster", subsets: ["latin"], weight: ["700", "800", "900"] });
 
 /** Dashboard area (after purchase). */
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <Shell>
-      <Suspense fallback={null}>
-        <WelcomeBanner />
-      </Suspense>
-      {children}
-    </Shell>
+    <div className={poster.variable}>
+      <Shell>
+        <Suspense fallback={null}>
+          <WelcomeBanner />
+        </Suspense>
+        {children}
+      </Shell>
+    </div>
   );
 }

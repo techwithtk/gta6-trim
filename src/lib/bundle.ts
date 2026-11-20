@@ -1,0 +1,204 @@
+import "server-only";
+import type { SocialPlatform } from "@/lib/plans";
+
+/**
+ * bundle.social posting API. A bundle.social "team" holds ONE account per platform, so each GTA6 Trim customer gets up
+ * to 3 teams ("slots", named gt6:<uid>:<n>) — that is how they reach 3 accounts per platform. Customers connect through
+ * bundle.social's hosted portal, which sends them to the platform's own login page. The API key stays on the server.
+ */
+const BASE = "https://api.bundle.social/api/v1";
+const KEY = process.env.BUNDLE_SOCIAL_API_KEY ?? "";
+
+export const socialConfigured = () => !!KEY;
+export const PLATFORMS: SocialPlatform[] = ["tiktok", "youtube", "instagram", "facebook"];
+const TYPE: Record<SocialPlatform, string> = { tiktok: "TIKTOK", youtube: "YOUTUBE", instagram: "INSTAGRAM", facebook: "FACEBOOK" };
+const PLATFORM_OF: Record<string, SocialPlatform> = { TIKTOK: "tiktok", YOUTUBE: "youtube", INSTAGRAM: "instagram", FACEBOOK: "facebook" };
+
+export class SocialError extends Error {
+  constructor(message: string, public status: number) {
+    super(message);
+  }
+}
+
+async function b<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(BASE + path, {
+    ...init,
+    cache: "no-store",
+    headers: { "x-api-key": KEY, "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    signal: init?.signal ?? AbortSignal.timeout(60_000),
+  });
+  const text = await res.text();
+  let body: unknown = null;
+  try { body = text ? JSON.parse(text) : null; } catch { body = null; }
+  if (!res.ok) {
+    const e = (body ?? {}) as { message?: string | string[]; error?: string };
+    const msg = Array.isArray(e.message) ? e.message.join(", ") : e.message ?? e.error ?? `Posting service error ${res.status}`;
+    throw new SocialError(msg, res.status);
+  }
+  return body as T;
+}
+
+/* ------------------------------------------------------------------ slots (one bundle.social team each) */
+
+type Team = { id: string; name: string };
+const prefix = (uid: string) => `gt6:${uid}:`;
+
+/** The customer's slot teams, slot 1 first. Only teams whose name carries their user id count as theirs. */
+async function slots(uid: string): Promise<{ id: string; n: number }[]> {
+  const d = await b<{ items?: Team[] }>(`/team/?search=${encodeURIComponent(prefix(uid))}&limit=50`);
+  return (d.items ?? [])
+    .filter((t) => t.name.startsWith(prefix(uid)) && /^\d+$/.test(t.name.slice(prefix(uid).length)))
+    .map((t) => ({ id: t.id, n: Number(t.name.slice(prefix(uid).length)) }))
+    .sort((a, z) => a.n - z.n);
+}
+
+async function createSlot(uid: string, n: number): Promise<string> {
+  const t = await b<Team>("/team/", { method: "POST", body: JSON.stringify({ name: `${prefix(uid)}${n}` }) });
+  return t.id;
+}
+
+/* ------------------------------------------------------------------ accounts */
+
+export type SocialAccount = { id: string; platform: SocialPlatform; username: string; displayName: string; active: boolean; slot: number };
+type RawAccount = { id: string; type: string; teamId: string; username?: string | null; displayName?: string | null; deleteOn?: string | null; channels?: { id: string; name?: string | null; username?: string | null }[] | null };
+
+/** Account ids are "<teamId>~<TYPE>" because bundle.social disconnects and posts by team + platform. */
+const accountId = (teamId: string, type: string) => `${teamId}~${type}`;
+export const parseAccountId = (id: string) => {
+  const [teamId, type] = id.split("~");
+  return teamId && PLATFORM_OF[type] ? { teamId, type, platform: PLATFORM_OF[type] } : null;
+};
+
+export async function listAccounts(uid: string): Promise<SocialAccount[]> {
+  const mine = await slots(uid);
+  const teams = await Promise.all(mine.map((s) => b<{ socialAccounts?: RawAccount[] }>(`/team/${s.id}`).then((t) => ({ s, t }))));
+  return teams.flatMap(({ s, t }) =>
+    (t.socialAccounts ?? [])
+      .filter((a) => PLATFORM_OF[a.type])
+      .map((a) => {
+        const ch = a.channels?.[0];
+        const name = a.displayName || ch?.name || a.username || PLATFORM_OF[a.type];
+        return { id: accountId(s.id, a.type), platform: PLATFORM_OF[a.type], username: a.username || ch?.username || "", displayName: name, active: !a.deleteOn, slot: s.n };
+      }),
+  );
+}
+
+/** Hosted connect link for the first slot without this platform (adds a slot if needed, up to the plan's cap). */
+export async function connectUrl(uid: string, platform: SocialPlatform, perPlatform: number, redirectUrl: string): Promise<string> {
+  const mine = await slots(uid);
+  const taken = new Set((await listAccounts(uid)).filter((a) => a.platform === platform).map((a) => parseAccountId(a.id)!.teamId));
+  let teamId = mine.filter((s) => s.n <= perPlatform).find((s) => !taken.has(s.id))?.id;
+  if (!teamId) {
+    const used = new Set(mine.map((s) => s.n));
+    const n = Array.from({ length: perPlatform }, (_, i) => i + 1).find((k) => !used.has(k));
+    if (!n) throw new SocialError(`You can connect up to ${perPlatform} accounts per platform.`, 409);
+    teamId = await createSlot(uid, n);
+  }
+  const d = await b<{ url: string }>("/social-account/create-portal-link", {
+    method: "POST",
+    body: JSON.stringify({ teamId, socialAccountTypes: [TYPE[platform]], redirectUrl, expiresIn: 30, hidePoweredBy: true, goBackButtonText: "Back to GTA6 Trim", language: "en" }),
+  });
+  return d.url;
+}
+
+export async function disconnect(uid: string, id: string) {
+  const p = parseAccountId(id);
+  if (!p || !(await slots(uid)).some((s) => s.id === p.teamId)) throw new SocialError("Account not found.", 404);
+  await b("/social-account/disconnect", { method: "DELETE", body: JSON.stringify({ type: p.type, teamId: p.teamId }) });
+}
+
+/* ------------------------------------------------------------------ posts */
+
+export type PostResult = {
+  id: string;
+  status: "published" | "partial" | "failed" | "scheduled" | "publishing";
+  externalId?: string; // "<jobId>/<file>"
+  createdAt?: string;
+  scheduledFor?: string;
+  platforms: { platform: string; accountId?: string; status: string; url?: string; error?: string }[];
+};
+
+type RawPost = {
+  id: string;
+  teamId: string;
+  referenceKey?: string | null;
+  status: string;
+  postDate?: string | null;
+  createdAt?: string | null;
+  data?: Record<string, unknown>;
+  error?: string | null;
+  errors?: Record<string, string | null> | null;
+  externalData?: Record<string, { permalink?: string | null } | null> | null;
+};
+
+/** referenceKey = "<jobId>/<file>@<sentAt>" — the same for every slot team a single "Post" click went to. */
+const clipOf = (ref?: string | null) => (ref && ref.includes("@") ? ref.slice(0, ref.lastIndexOf("@")) : undefined);
+
+function rollup(parts: RawPost[]): PostResult {
+  const platforms = parts.flatMap((p) =>
+    Object.keys(p.data ?? {}).filter((t) => PLATFORM_OF[t]).map((t) => {
+      const err = p.errors?.[t] ?? (p.status === "ERROR" ? p.error || "Posting failed." : undefined);
+      const url = p.externalData?.[t]?.permalink ?? undefined;
+      const st = err ? "failed" : url || p.status === "POSTED" ? "published" : p.status === "SCHEDULED" ? "scheduled" : "publishing";
+      return { platform: PLATFORM_OF[t], accountId: accountId(p.teamId, t), status: st, url, error: err ?? undefined };
+    }),
+  );
+  const s = platforms.map((x) => x.status);
+  const status: PostResult["status"] =
+    s.length && s.every((x) => x === "published") ? "published"
+    : s.some((x) => x === "failed") ? (s.some((x) => x === "published") ? "partial" : s.every((x) => x === "failed") ? "failed" : "publishing")
+    : s.some((x) => x === "scheduled") && !s.some((x) => x === "publishing") ? "scheduled"
+    : "publishing";
+  const first = parts[0];
+  return { id: first.referenceKey ?? first.id, status, externalId: clipOf(first.referenceKey), createdAt: first.createdAt ?? undefined, scheduledFor: first.postDate ?? undefined, platforms };
+}
+
+export type PostInput = {
+  uid: string;
+  externalId: string; // "<jobId>/<file>"
+  caption: string;
+  title: string;
+  videoUrl: string;
+  accounts: SocialAccount[];
+  scheduledFor?: string; // ISO 8601; omitted = now
+};
+
+export async function createPost(i: PostInput): Promise<PostResult> {
+  const ref = `${i.externalId}@${Date.now()}`.slice(0, 128);
+  const byTeam = new Map<string, SocialAccount[]>();
+  for (const a of i.accounts) {
+    const t = parseAccountId(a.id)!.teamId;
+    byTeam.set(t, [...(byTeam.get(t) ?? []), a]);
+  }
+  const postDate = i.scheduledFor ?? new Date().toISOString();
+  const created = await Promise.all(
+    [...byTeam].map(async ([teamId, accts]) => {
+      const up = await b<{ id: string }>("/upload/from-url", { method: "POST", body: JSON.stringify({ teamId, url: i.videoUrl }), signal: AbortSignal.timeout(120_000) });
+      const data: Record<string, unknown> = {};
+      for (const a of accts) {
+        const uploadIds = [up.id];
+        if (a.platform === "tiktok") data.TIKTOK = { type: "VIDEO", text: i.caption.slice(0, 2200), uploadIds, privacy: "PUBLIC_TO_EVERYONE" };
+        if (a.platform === "youtube") data.YOUTUBE = { type: "SHORT", text: i.title.slice(0, 100), description: i.caption.slice(0, 5000), uploadIds, privacy: "PUBLIC", madeForKids: false };
+        if (a.platform === "instagram") data.INSTAGRAM = { type: "REEL", text: i.caption.slice(0, 2200), uploadIds, shareToFeed: true };
+        if (a.platform === "facebook") data.FACEBOOK = { type: "REEL", text: i.caption.slice(0, 5000), uploadIds };
+      }
+      return b<RawPost>("/post/", {
+        method: "POST",
+        body: JSON.stringify({ teamId, title: i.title.slice(0, 100) || "GTA 6 clip", referenceKey: ref, postDate, status: "SCHEDULED", socialAccountTypes: accts.map((a) => TYPE[a.platform]), data }),
+        signal: AbortSignal.timeout(60_000),
+      });
+    }),
+  );
+  return rollup(created.map((p) => ({ ...p, referenceKey: p.referenceKey ?? ref })));
+}
+
+/** Recent posts across the customer's slots, one entry per "Post" click. */
+export async function listPosts(uid: string): Promise<PostResult[]> {
+  const mine = await slots(uid);
+  const all = (
+    await Promise.all(mine.map((s) => b<{ items?: RawPost[] }>(`/post/?teamId=${s.id}&orderBy=createdAt&order=DESC&limit=100`).then((d) => d.items ?? [])))
+  ).flat().filter((p) => clipOf(p.referenceKey) && p.status !== "DELETED");
+  const groups = new Map<string, RawPost[]>();
+  for (const p of all) groups.set(p.referenceKey!, [...(groups.get(p.referenceKey!) ?? []), p]);
+  return [...groups.values()].map(rollup).sort((a, z) => (z.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+}

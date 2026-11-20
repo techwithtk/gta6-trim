@@ -1,3 +1,5 @@
+/* Clerk styles live in their own layer, ranked above Tailwind's reset so inputs keep their borders and text colour. */
+@layer theme, base, clerk, components, utilities;
 @import "tailwindcss";
 
 /*

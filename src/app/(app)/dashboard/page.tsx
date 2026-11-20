@@ -1,668 +1,465 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Eye, Flame, Scissors, Radio, Rows3, Smartphone, Loader2, CheckCircle2, Clock, Square, ExternalLink } from "lucide-react";
-import { useLiveSim } from "@/lib/live";
-import { ago, fmtViewers, type Moment, type Platform, type Stream } from "@/lib/mock";
+import { AnimatePresence, motion } from "motion/react";
+import { Link2, Check, Loader2, Lock, AlertCircle, Clock, Upload, FileVideo, Scissors, ChevronDown } from "lucide-react";
+import { Segmented, Toggle } from "@/components/forms";
+import { EASE, EASE_OUT, SPRING, SPRING_EVENT, T } from "@/components/motion";
 import { usePlan } from "@/lib/account";
-import { Modal } from "@/components/Modal";
-import { SceneArt } from "@/components/SceneArt";
-import { LiveThumb } from "@/components/LiveThumb";
-import { Avatar, HypeBar, HypeGauge, LiveBadge, PageTitle, PermissionBadge, PlatformBadge, SectionLabel, Sparkline, Waveform } from "@/components/ui";
-import { AnimatedNumber, EASE, EASE_OUT, MomentToasts, RadarSweep, SPRING, SPRING_EVENT, T } from "@/components/motion";
+import { addJob, monthUsage, useJobs, type Job } from "@/lib/jobs";
+import { ClipGrid, ClipPlayer } from "@/components/ClipGrid";
 
-const byHype = (a: Stream, b: Stream) => b.hype - a.hype;
-const byViewers = (a: Stream, b: Stream) => b.viewers - a.viewers;
-const fmtInt = (v: number) => Math.round(v).toString();
-const tintOf = (s: Stream) => s.scene[0];
-const RERANK_MS = 6000;
+/* ---------- helpers ---------- */
+function parseYouTubeId(raw: string): string | null {
+  const s = raw.trim();
+  const m =
+    s.match(/(?:youtube\.com\/watch\?(?:.*&)?v=|youtu\.be\/|youtube\.com\/live\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([A-Za-z0-9_-]{11})/) ??
+    s.match(/^([A-Za-z0-9_-]{11})$/);
+  return m ? m[1] : null;
+}
+const fmtDur = (s: number) => {
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = Math.floor(s % 60);
+  return h ? `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}` : `${m}:${String(sec).padStart(2, "0")}`;
+};
+const fmtWhen = (unix: number) => {
+  if (!unix) return "";
+  const d = new Date(unix * 1000);
+  const mins = Math.round((Date.now() - d.getTime()) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  if (mins < 60 * 24) return `${Math.round(mins / 60)} h ago`;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+};
 
-type Filter = "all" | Platform;
+type Meta = { id: string; title: string; channel: string; duration: number; thumbnail: string; captions: boolean; isLive: boolean };
 
-export default function RadarPage() {
+/** Brand primary button: fluo pink, ink border, hard white shadow (same language as the landing page). */
+const PRIMARY =
+  "inline-flex h-12 items-center justify-center gap-2 border-2 border-black bg-pink px-6 font-poster text-[20px] font-black uppercase tracking-[0.01em] text-black shadow-[4px_4px_0_#fafafa] transition-transform duration-150 hover:-translate-y-0.5 active:translate-y-0 disabled:pointer-events-none disabled:opacity-35 disabled:shadow-none";
+
+export default function MakeClipsPage() {
   const plan = usePlan();
-  // Streams this customer is clipping right now (limited by plan.liveSessions).
-  const [active, setActive] = useState<Set<string>>(() => new Set(["s1", "s2"]));
-  const { streams, moments, now, source } = useLiveSim(active);
-  const [view, setView] = useState<"table" | "feed">("table");
-  const [filter, setFilter] = useState<Filter>("all");
-  const [confirmFor, setConfirmFor] = useState<Stream | null>(null);
-  const [rightsOk, setRightsOk] = useState(false);
-  const [limitHit, setLimitHit] = useState(false);
+  const { jobs, ready, offline } = useJobs();
+  const usage = monthUsage(jobs);
 
-  const start = (s: Stream, confirmed = false) => {
-    if (active.has(s.id)) return;
-    if (active.size >= plan.limits.liveSessions) return setLimitHit(true);
-    if (s.permission === "discovery" && !confirmed) {
-      setRightsOk(false);
-      return setConfirmFor(s);
-    }
-    setActive((a) => new Set(a).add(s.id));
-    setConfirmFor(null);
+  const [source, setSource] = useState<"youtube" | "upload">("youtube");
+  const [url, setUrl] = useState("");
+  const [touched, setTouched] = useState(false);
+  const [count, setCount] = useState(6);
+  const [autopost, setAutopost] = useState(false);
+  const [rights, setRights] = useState(false);
+  const [lookup, setLookup] = useState<{ vid: string; meta?: Meta; error?: string } | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+  const [playing, setPlaying] = useState<{ job: string; file: string } | null>(null);
+  const [file, setFile] = useState<{ name: string; size: number; duration: number } | null>(null);
+  const [upload, setUpload] = useState<{ state: "idle" | "uploading" | "done" | "error"; pct: number; key?: string; error?: string }>({ state: "idle", pct: 0 });
+
+  const vid = useMemo(() => parseYouTubeId(url), [url]);
+  const meta = vid && lookup?.vid === vid ? lookup.meta ?? null : null;
+  const metaState: "idle" | "loading" | "error" = !vid ? "idle" : lookup?.vid !== vid ? "loading" : lookup.error ? "error" : "idle";
+  const metaError = lookup?.vid === vid ? lookup.error ?? "" : "";
+  const maxSec = plan.limits.ytMaxMinutes * 60;
+  const tooLong = meta ? meta.duration > maxSec : false;
+  const left = Math.max(0, plan.limits.ytImports - usage.videos);
+  const outOfImports = ready && left <= 0;
+  const fileTooLong = file ? file.duration > maxSec : false;
+  const canStart = source === "upload"
+    ? upload.state === "done" && !!upload.key && !fileTooLong && rights && !outOfImports && !starting
+    : !!meta && meta.id === vid && !tooLong && meta.captions && !meta.isLive && rights && !outOfImports && !starting;
+  const linkError = touched && url && !vid ? "That doesn't look like a YouTube video link. Try youtube.com/watch?v=… or youtu.be/…" : null;
+
+  // Real video details for the pasted link.
+  useEffect(() => {
+    if (!vid) return;
+    let live = true;
+    fetch(`/api/import/meta?url=${encodeURIComponent(`https://youtu.be/${vid}`)}`)
+      .then(async (r) => ({ ok: r.ok, d: await r.json() }))
+      .then(({ ok, d }) => { if (live) setLookup(ok ? { vid, meta: d } : { vid, error: d.error ?? "Couldn't read that video." }); })
+      .catch(() => { if (live) setLookup({ vid, error: "Couldn't reach the clipping engine." }); });
+    return () => { live = false; };
+  }, [vid]);
+
+  const startJob = async () => {
+    if (!canStart) return;
+    setStarting(true); setStartError(null);
+    try {
+      const payload = source === "upload"
+        ? { upload: upload.key, title: file?.name.replace(/\.[^.]+$/, ""), count, rights }
+        : { url: `https://youtu.be/${vid}`, count, rights };
+      const r = await fetch("/api/import", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error ?? "Couldn't start.");
+      addJob(d);
+      setUrl(""); setTouched(false); setRights(false); setFile(null); setUpload({ state: "idle", pct: 0 });
+      document.getElementById("processing")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (e) {
+      setStartError(e instanceof Error ? e.message : "Couldn't start.");
+    } finally { setStarting(false); }
   };
-  const stop = (s: Stream) =>
-    setActive((a) => {
-      const n = new Set(a);
-      n.delete(s.id);
-      return n;
+
+  const pickFile = async (f: File | undefined) => {
+    if (!f) return;
+    const ext = (f.name.split(".").pop() ?? "").toLowerCase();
+    if (!["mp4", "mov", "mkv", "webm"].includes(ext)) { setUpload({ state: "error", pct: 0, error: "Upload an MP4, MOV, MKV or WEBM video." }); return; }
+    if (f.size > 8 * 1024 ** 3) { setUpload({ state: "error", pct: 0, error: "That file is over 8 GB." }); return; }
+    // Read the length in the browser so an over-limit video is stopped before uploading.
+    const duration = await new Promise<number>((resolve) => {
+      const v = document.createElement("video");
+      v.preload = "metadata";
+      v.onloadedmetadata = () => { resolve(isFinite(v.duration) ? v.duration : 0); URL.revokeObjectURL(v.src); };
+      v.onerror = () => resolve(0);
+      v.src = URL.createObjectURL(f);
     });
-  const toggle = (s: Stream) => (active.has(s.id) ? stop(s) : start(s));
-
-  // Re-rank on a slow cadence so rows glide occasionally instead of jittering every tick (1/3 rule).
-  // Real Twitch data: rank by real viewers until the chat-based hype detector ships (hype is simulated for now).
-  const streamsRef = useRef(streams);
-  const rankRef = useRef(byHype);
-  useEffect(() => {
-    streamsRef.current = streams;
-    rankRef.current = source.kind === "twitch" ? byViewers : byHype;
-  });
-  const [order, setOrder] = useState<string[]>(() => [...streams].sort(byHype).map((s) => s.id));
-  useEffect(() => {
-    const t = setInterval(() => setOrder([...streamsRef.current].sort(rankRef.current).map((s) => s.id)), RERANK_MS);
-    return () => clearInterval(t);
-  }, []);
-  // Keep the slow-changing rank order, but show streams that arrived since the last re-rank immediately.
-  const rankFn = source.kind === "twitch" ? byViewers : byHype;
-  const ranked = [
-    ...order.map((id) => streams.find((s) => s.id === id)!).filter(Boolean),
-    ...streams.filter((s) => !order.includes(s.id)).sort(rankFn),
-  ];
-  const sorted = filter === "all" ? ranked : ranked.filter((s) => s.platform === filter);
-  // Spotlight: first spiking stream in rank order (stable while it stays hot), else the top-ranked stream.
-  const spotlight = source.kind === "twitch" ? sorted[0] : sorted.find((s) => s.hype >= 80) ?? sorted[0];
-  const counts = { all: streams.length, twitch: 0, kick: 0, youtube: 0 } as Record<Filter, number>;
-  streams.forEach((s) => counts[s.platform]++);
-  const activeStreams = streams.filter((s) => active.has(s.id));
-
-  // Toasts for moments detected after page load.
-  const [toasts, setToasts] = useState<{ id: string; channel: string; title: string; score: number }[]>([]);
-  const seen = useRef<Set<string> | null>(null);
-  useEffect(() => {
-    if (!moments.length) return;
-    if (!seen.current) {
-      seen.current = new Set(moments.map((m) => m.id));
-      return;
+    setFile({ name: f.name, size: f.size, duration });
+    if (duration > maxSec) { setUpload({ state: "error", pct: 0, error: `Longer than your ${plan.limits.ytMaxMinutes / 60}h limit.` }); return; }
+    setUpload({ state: "uploading", pct: 0 });
+    try {
+      const r = await fetch("/api/import/upload", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ext }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error ?? "Couldn't start the upload.");
+      await new Promise<void>((resolve, reject) => {
+        const x = new XMLHttpRequest();
+        x.open("PUT", d.url);
+        x.upload.onprogress = (e) => e.lengthComputable && setUpload((u) => ({ ...u, pct: Math.round((e.loaded / e.total) * 100) }));
+        x.onload = () => (x.status >= 200 && x.status < 300 ? resolve() : reject(new Error("Upload failed. Please try again.")));
+        x.onerror = () => reject(new Error("Upload failed. Check your connection and try again."));
+        x.send(f);
+      });
+      setUpload({ state: "done", pct: 100, key: d.key });
+    } catch (e) {
+      setUpload({ state: "error", pct: 0, error: e instanceof Error ? e.message : "Upload failed." });
     }
-    const fresh = moments.filter((m) => !seen.current!.has(m.id));
-    if (!fresh.length) return;
-    fresh.forEach((m) => seen.current!.add(m.id));
-    const add = fresh.map(({ id, channel, title, score }) => ({ id, channel, title, score }));
-    const show = setTimeout(() => setToasts((t) => [...add, ...t].slice(0, 2)), 0);
-    setTimeout(() => setToasts((t) => t.filter((x) => !add.some((a) => a.id === x.id))), 4000);
-    return () => clearTimeout(show);
-  }, [moments]);
+  };
 
-  const totalViewers = streams.reduce((s, x) => s + x.viewers, 0);
-  const spiking = streams.filter((s) => s.hype >= 80).length;
-  const clips = streams.reduce((s, x) => s + x.clipsToday, 0);
-  const avgHype = streams.reduce((s, x) => s + x.hype, 0) / streams.length;
+  const hint = outOfImports ? `You've used all ${plan.limits.ytImports} videos for this month.`
+    : source === "upload"
+      ? (upload.state === "uploading" ? `Uploading… ${upload.pct}%` : upload.state !== "done" ? "Choose a video file to continue" : !rights ? "Tick the rights box to continue" : `Uses 1 of ${left} videos left this month`)
+      : !vid ? "Paste a link to continue"
+      : metaState === "loading" ? "Reading the video…"
+      : metaState === "error" ? metaError
+      : meta && !meta.captions ? "This video has no English captions yet. Upload the file instead."
+      : meta?.isLive ? "This stream is still live. Paste it after it ends."
+      : tooLong ? "Video is over your plan's length limit"
+      : !rights ? "Tick the rights box to continue"
+      : `Uses 1 of ${left} videos left this month`;
+
+  const videos = jobs.filter((j) => j.kind !== "live"); // live sessions have their own page
+  const processing = videos.filter((j) => j.status === "queued" || j.status === "running");
+  // "Your clips" shows every Short in one place: finished videos plus live sessions that have produced clips.
+  const finished = jobs.filter((j) => (j.kind === "live" ? j.clips.length > 0 : j.status === "done"));
+  const failed = videos.filter((j) => j.status === "error");
 
   return (
     <>
-      <PageTitle
-        title="Live Radar"
-        art="sunset"
-        sub={source.kind === "twitch" ? `Grand Theft Auto VI · ${source.note} · ranked by viewers · hype is a preview until chat analysis ships` : "Grand Theft Auto VI · sample streams (connect Twitch to go live)"}
-        icon={<RadarSweep />}
-        right={
-          <div className="flex h-9 items-center rounded-lg border border-line bg-surface p-0.5 text-xs" role="tablist" aria-label="View">
-            {([["table", Rows3, "Table"], ["feed", Smartphone, "Feed"]] as const).map(([v, Icon, label]) => (
-              <button
-                key={v}
-                role="tab"
-                aria-selected={view === v}
-                onClick={() => setView(v)}
-                className={`relative flex h-full items-center gap-1.5 rounded-md px-3 transition-colors duration-150 ${view === v ? "text-text" : "text-muted hover:text-text"}`}
-              >
-                {view === v ? <motion.span layoutId="view-pill" className="absolute inset-0 -z-10 rounded-md bg-white/[0.08]" /> : null}
-                <Icon className="size-3.5" strokeWidth={1.75} /> {label}
-              </button>
-            ))}
-          </div>
-        }
-      />
-
-      {/* KPI strip */}
-      <motion.section
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: T.slow, ease: EASE_OUT }}
-        className="panel mb-6 grid grid-cols-2 divide-line lg:grid-cols-4 lg:divide-x [&>*:nth-child(-n+2)]:border-b [&>*:nth-child(-n+2)]:border-line lg:[&>*:nth-child(-n+2)]:border-b-0"
-      >
-        <Kpi icon={Radio} label="Live streams" value={streams.length} trend={[3, 4, 4, 5, 6, 6, 7, 8]} />
-        <Kpi icon={Eye} label="Viewers watched" value={totalViewers} format={fmtViewers} trend={[40, 52, 61, 70, 88, 104, 121, 137]} />
-        <Kpi icon={Flame} label="Spiking now" value={spiking} hot={spiking > 0} note={`avg hype ${Math.round(avgHype)}`} />
-        <Kpi icon={Scissors} label="Clips today" value={clips} trend={[4, 7, 11, 15, 19, 26, 31, clips]} />
-      </motion.section>
-
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="min-w-0">
-          <AnimatePresence mode="wait" initial={false}>
-            {view === "table" ? (
-              <motion.div key="table" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4, transition: { duration: T.quick } }} transition={{ duration: T.base, ease: EASE }}>
-                <SessionBar active={activeStreams} max={plan.limits.liveSessions} planName={plan.name} onStop={stop} />
-                {spotlight ? <Spotlight s={spotlight} clipping={active.has(spotlight.id)} onToggle={() => toggle(spotlight)} /> : null}
-                <SectionLabel
-                  right={
-                    <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Filter by platform">
-                      {(["all", "twitch", "kick", "youtube"] as const).map((f) => (
-                        <button
-                          key={f}
-                          onClick={() => setFilter(f)}
-                          aria-pressed={filter === f}
-                          className={`relative inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs transition-colors duration-150 ${filter === f ? "text-text" : "text-muted hover:text-text"}`}
-                        >
-                          {filter === f ? <motion.span layoutId="filter-pill" className="absolute inset-0 -z-10 rounded-md bg-white/[0.08] ring-1 ring-inset ring-white/[0.08]" /> : null}
-                          {f === "all" ? "All" : PLATFORM_NAME[f]}
-                          <span className="num text-subtle">{counts[f]}</span>
-                        </button>
-                      ))}
-                    </div>
-                  }
-                >
-                  Live GTA 6 streams
-                </SectionLabel>
-                <StreamTable streams={sorted} active={active} onToggle={toggle} />
-              </motion.div>
-            ) : (
-              <motion.div key="feed" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, transition: { duration: T.quick } }} transition={{ duration: T.slow, ease: EASE_OUT }}>
-                <PhoneFeed streams={sorted} />
-              </motion.div>
-            )}
-          </AnimatePresence>
+      {/* Header */}
+      <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-subtle">Clip studio</p>
+          <h1 className="mt-1 font-poster text-[clamp(44px,6vw,64px)] font-black uppercase leading-[0.9]">
+            Make <span className="text-pink">clips.</span>
+          </h1>
+          <p className="mt-2 max-w-xl text-sm text-muted">Paste a YouTube link or upload a video. We find the best moments and cut captioned 9:16 Shorts: facecam on top, gameplay below.</p>
         </div>
-        <MomentsFeed moments={moments} now={now} />
+        <div className="flex gap-6 font-mono text-[11px] uppercase tracking-wider text-subtle">
+          <span><span className="num block font-poster text-[28px] font-black not-italic leading-none text-text">{ready ? left : "–"}</span>videos left</span>
+          <span><span className="num block font-poster text-[28px] font-black leading-none text-text">{ready ? usage.clips : "–"}</span>clips this month</span>
+        </div>
       </div>
 
-      <MomentToasts toasts={toasts} />
+      {offline ? (
+        <p role="status" className="mb-5 flex items-center gap-2 border border-orange/40 bg-orange/[0.07] px-4 py-3 text-sm text-orange">
+          <AlertCircle className="size-4 shrink-0" /> {offline}
+        </p>
+      ) : null}
 
-      {/* Rights check before clipping a stream the customer doesn't own */}
-      <Modal open={!!confirmFor} onClose={() => setConfirmFor(null)} title="Start clipping this stream?">
-        {confirmFor ? (
-          <div className="space-y-4 p-5">
-            <div className="flex items-center gap-3 rounded-xl border border-line bg-surface-2 p-3">
-              <Avatar name={confirmFor.channel} tint={tintOf(confirmFor)} size={36} live />
-              <div className="min-w-0">
-                <div className="text-sm font-medium">{confirmFor.channel}</div>
-                <div className="truncate text-xs text-subtle">{PLATFORM_NAME[confirmFor.platform]} · {confirmFor.url}</div>
+      {/* 1. Create */}
+      <section className="mb-10 border-2 border-white/85 bg-surface shadow-[6px_6px_0_var(--pink)]" aria-label="New clips">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3 md:px-6">
+          <Segmented value={source} onChange={(v) => setSource(v as "youtube" | "upload")} options={[["youtube", "YouTube link"], ["upload", "Upload a file"]]} id="src" />
+          <span className="font-mono text-[10.5px] uppercase tracking-wider text-subtle">Up to {plan.limits.ytMaxMinutes / 60}h per video</span>
+        </div>
+
+        <div className="grid gap-6 p-5 md:p-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+          {/* Source */}
+          <div className="min-w-0">
+            {source === "upload" ? (
+              <div>
+                <label className={`flex cursor-pointer flex-col items-center justify-center gap-2 border-2 border-dashed px-4 py-10 text-center transition-colors duration-150 ${upload.state === "error" ? "border-red/60" : "border-white/20 hover:border-pink"}`}>
+                  <input type="file" accept="video/mp4,video/quicktime,video/x-matroska,video/webm,.mp4,.mov,.mkv,.webm" className="sr-only" disabled={upload.state === "uploading"} onChange={(e) => pickFile(e.target.files?.[0])} />
+                  {file ? <FileVideo className="size-7 text-pink" /> : <Upload className="size-7 text-subtle" />}
+                  <span className="text-[15px] font-medium">{file ? file.name : "Choose a video file"}</span>
+                  <span className="text-xs text-subtle">
+                    {file ? `${(file.size / 1024 ** 3).toFixed(2)} GB${file.duration ? ` · ${fmtDur(file.duration)}` : ""}` : "MP4, MOV, MKV or WEBM · up to 8 GB"}
+                  </span>
+                </label>
+                {upload.state === "uploading" || upload.state === "done" ? (
+                  <div className="mt-3 h-2 overflow-hidden bg-white/[0.07]">
+                    <motion.span className={`block h-full ${upload.state === "done" ? "bg-green" : "bg-pink"}`} animate={{ width: `${upload.pct}%` }} transition={{ duration: 0.3, ease: EASE }} />
+                  </div>
+                ) : null}
+                <p className={`mt-2 flex items-center gap-1.5 text-xs ${upload.state === "error" ? "text-red" : "text-subtle"}`}>
+                  {upload.state === "error" ? <><AlertCircle className="size-3.5" /> {upload.error}</>
+                    : upload.state === "done" ? <><Check className="size-3.5 text-green" /> Uploaded. We&apos;ll transcribe the speech and find the moments.</>
+                    : "Your file goes straight to secure storage and is deleted once your clips are made."}
+                </p>
               </div>
-            </div>
-            <p className="text-sm text-muted">
-              Reposting someone else&apos;s stream without permission can get your social accounts struck. Only clip streams you own, or ones whose streamer allows clipping (for example a paid clipping campaign).
-            </p>
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg p-1 text-sm">
-              <input type="checkbox" checked={rightsOk} onChange={(e) => setRightsOk(e.target.checked)} className="mt-0.5 size-4 accent-[var(--pink)]" />
-              I have permission from this streamer to clip and repost their content.
-            </label>
-            <div className="flex justify-end gap-2 pt-1">
-              <button onClick={() => setConfirmFor(null)} className="h-9 rounded-lg border border-line-strong px-4 text-sm text-muted transition-colors duration-150 hover:text-text">Cancel</button>
-              <button
-                disabled={!rightsOk}
-                onClick={() => start(confirmFor, true)}
-                className="inline-flex h-9 items-center gap-2 rounded-lg accent-bg px-4 text-sm font-medium text-white transition-opacity duration-150 disabled:opacity-30"
-              >
-                <Scissors className="size-4" /> Start clipping
-              </button>
-            </div>
-          </div>
-        ) : null}
-      </Modal>
+            ) : (
+              <>
+                <label htmlFor="yt" className="text-sm font-medium">YouTube link</label>
+                <div className={`mt-2 flex h-14 items-center gap-3 border-2 bg-bg px-4 transition-colors duration-150 focus-within:border-pink ${linkError ? "border-red/70" : "border-white/20"}`}>
+                  <Link2 className="size-5 shrink-0 text-subtle" />
+                  <input
+                    id="yt"
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    onBlur={() => setTouched(true)}
+                    placeholder="https://www.youtube.com/watch?v=…"
+                    className="h-full w-full bg-transparent text-[15px] outline-none placeholder:text-subtle"
+                    aria-invalid={!!linkError}
+                    aria-describedby="yt-help"
+                    inputMode="url"
+                    autoComplete="off"
+                  />
+                  <AnimatePresence>
+                    {metaState === "loading" ? <Loader2 className="size-4 animate-spin text-subtle" /> : meta ? (
+                      <motion.span initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.5, opacity: 0 }} transition={SPRING_EVENT} className="grid size-6 place-items-center rounded-full bg-green">
+                        <Check className="size-3.5 text-black" strokeWidth={3} />
+                      </motion.span>
+                    ) : null}
+                  </AnimatePresence>
+                </div>
+                <p id="yt-help" className={`mt-2 flex items-center gap-1.5 text-xs ${linkError ? "text-red" : "text-subtle"}`}>
+                  {linkError ? <AlertCircle className="size-3.5" /> : null}
+                  {linkError ?? "Videos with English captions. Finished live replays work too. No captions? Upload the file instead."}
+                </p>
 
-      {/* Plan limit */}
-      <Modal open={limitHit} onClose={() => setLimitHit(false)} title="All live slots in use">
-        <div className="space-y-4 p-5">
-          <p className="text-sm text-muted">
-            Your <span className="text-text">{plan.name}</span> plan clips <span className="num text-text">{plan.limits.liveSessions}</span> live streams at the same time. Stop one of them, or upgrade to clip more at once.
-          </p>
-          <div className="flex justify-end gap-2">
-            <button onClick={() => setLimitHit(false)} className="h-9 rounded-lg border border-line-strong px-4 text-sm text-muted transition-colors duration-150 hover:text-text">Got it</button>
-            <Link href="/dashboard/billing" className="inline-flex h-9 items-center rounded-lg bg-white px-4 text-sm font-medium text-black transition-colors duration-150 hover:bg-white/90">See plans</Link>
+                <AnimatePresence initial={false}>
+                  {meta && vid ? (
+                    <motion.div key={vid} initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0, transition: { duration: T.quick } }} transition={{ duration: T.slow, ease: EASE_OUT }} className="overflow-hidden">
+                      <div className="mt-4 flex gap-4 border border-line bg-surface-2 p-3">
+                        <div className="relative aspect-video w-40 shrink-0 overflow-hidden bg-black">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={meta.thumbnail} alt="" className="size-full object-cover" />
+                          <span className="num absolute bottom-1 right-1 bg-black/80 px-1 text-[10px]">{fmtDur(meta.duration)}</span>
+                        </div>
+                        <div className="min-w-0 py-1">
+                          <div className="line-clamp-2 text-sm font-medium">{meta.title}</div>
+                          <div className="mt-1 text-xs text-subtle">{meta.channel}</div>
+                          {tooLong ? (
+                            <p className="mt-2 flex items-center gap-1.5 text-xs text-orange"><AlertCircle className="size-3.5" />Longer than your {plan.limits.ytMaxMinutes / 60}h limit. <Link href="/dashboard/billing" className="underline underline-offset-2">Upgrade</Link></p>
+                          ) : !meta.captions ? (
+                            <p className="mt-2 flex items-center gap-1.5 text-xs text-orange"><AlertCircle className="size-3.5" />No English captions. Upload the file instead.</p>
+                          ) : (
+                            <p className="mt-2 flex items-center gap-1.5 text-xs text-green"><Check className="size-3.5" />Ready to clip</p>
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
+              </>
+            )}
+          </div>
+
+          {/* Settings + start */}
+          <div className="flex flex-col gap-4 lg:border-l lg:border-line lg:pl-6">
+            <div>
+              <span className="mb-2 block text-sm font-medium">How many clips</span>
+              <Segmented value={String(count)} onChange={(v) => setCount(Number(v))} options={[["3", "3"], ["6", "6"], ["10", "10"], ["15", "15"]]} id="cnt" />
+            </div>
+
+            {plan.limits.autopost ? (
+              <label className="flex cursor-pointer items-center justify-between gap-3 border border-line bg-surface-2 px-3 py-2.5">
+                <span>
+                  <span className="block text-sm font-medium">Auto-post when ready</span>
+                  <span className="block text-[11px] text-subtle">Best clips post to your connected accounts</span>
+                </span>
+                <Toggle on={autopost} onChange={setAutopost} label="Auto-post when ready" />
+              </label>
+            ) : (
+              <div className="flex items-center justify-between gap-3 border border-line bg-surface-2 px-3 py-2.5">
+                <span className="flex items-center gap-1.5 text-sm text-muted"><Lock className="size-3.5" /> Auto-post</span>
+                <Link href="/dashboard/billing" className="text-[11px] text-text underline underline-offset-2">Studio plan</Link>
+              </div>
+            )}
+
+            <label className="flex cursor-pointer items-start gap-2.5 text-[13px] text-muted">
+              <input type="checkbox" checked={rights} onChange={(e) => setRights(e.target.checked)} className="mt-0.5 size-4 accent-[var(--pink)]" />
+              <span>I own this video or have the creator&apos;s permission to clip and repost it.</span>
+            </label>
+
+            <button onClick={startJob} disabled={!canStart} className={`${PRIMARY} mt-auto w-full`}>
+              {starting ? <Loader2 className="size-5 animate-spin" /> : <Scissors className="size-5" strokeWidth={2.5} />} Start clipping
+            </button>
+            <p className={`-mt-1 text-center text-xs ${metaState === "error" || outOfImports ? "text-orange" : "text-subtle"}`}>{hint}</p>
+            {startError ? <p role="alert" className="border border-red/40 bg-red/[0.07] px-3 py-2 text-xs text-red">{startError}</p> : null}
           </div>
         </div>
-      </Modal>
+      </section>
+
+      {/* 2. Processing now */}
+      <AnimatePresence initial={false}>
+        {processing.length ? (
+          <motion.section id="processing" key="processing" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: T.slow, ease: EASE_OUT }} className="mb-10 scroll-mt-20" aria-label="Processing now">
+            <SectionHead title="Processing now" count={processing.length} live />
+            <div className="space-y-3">
+              {processing.map((j) => <ProcessingRow key={j.id} j={j} />)}
+            </div>
+          </motion.section>
+        ) : null}
+      </AnimatePresence>
+
+      {/* 3. Ready clips */}
+      <section aria-label="Your clips">
+        <SectionHead title="Your clips" count={finished.reduce((n, j) => n + j.clips.length, 0)} />
+        {!ready ? (
+          <div className="grid gap-3 sm:grid-cols-3">{[0, 1, 2].map((i) => <div key={i} className="h-40 animate-pulse bg-surface" />)}</div>
+        ) : finished.length === 0 && processing.length === 0 ? (
+          <EmptyState />
+        ) : finished.length === 0 ? (
+          <p className="border border-line bg-surface px-4 py-6 text-sm text-subtle">Your first clips will appear here in a few minutes.</p>
+        ) : (
+          <div className="space-y-6">
+            {finished.map((j) => <FinishedVideo key={j.id} j={j} onPlay={(file) => setPlaying({ job: j.id, file })} />)}
+          </div>
+        )}
+      </section>
+
+      {/* 4. Failed */}
+      {failed.length ? <FailedList jobs={failed} /> : null}
+
+      <ClipPlayer playing={playing} onClose={() => setPlaying(null)} />
     </>
   );
 }
 
-const PLATFORM_NAME: Record<Platform, string> = { twitch: "Twitch", kick: "Kick", youtube: "YouTube" };
-
-/** Shows the customer's active live clipping sessions vs. their plan's slot count. */
-function SessionBar({ active, max, planName, onStop }: { active: Stream[]; max: number; planName: string; onStop: (s: Stream) => void }) {
+function SectionHead({ title, count, live }: { title: string; count?: number; live?: boolean }) {
   return (
-    <div className="panel mb-6 flex flex-wrap items-center gap-x-5 gap-y-3 px-4 py-3">
-      <div className="flex items-center gap-3">
-        <span className="relative grid size-8 place-items-center rounded-lg bg-white/[0.05] ring-1 ring-inset ring-white/[0.06]">
-          <Scissors className="size-4 text-muted" strokeWidth={1.75} />
-          {active.length ? <span className="live-ping absolute -right-0.5 -top-0.5 size-2 rounded-full bg-red" /> : null}
-        </span>
-        <div>
-          <div className="text-sm font-medium">
-            Clipping <span className="num">{active.length}</span> of <span className="num">{max}</span> live slots
-          </div>
-          <div className="text-xs text-subtle">{planName} plan · pick any stream below to start</div>
-        </div>
-      </div>
-      <div className="flex gap-1" aria-hidden>
-        {Array.from({ length: max }, (_, i) => (
-          <motion.span key={i} className="h-1.5 w-7 rounded-full" animate={{ backgroundColor: i < active.length ? "rgba(255,46,136,1)" : "rgba(255,255,255,0.08)" }} transition={{ duration: T.base, ease: EASE }} />
-        ))}
-      </div>
-      <div className="flex flex-1 flex-wrap justify-end gap-2">
-        <AnimatePresence initial={false} mode="popLayout">
-          {active.map((s) => (
-            <motion.span
-              key={s.id}
-              layout
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9, transition: { duration: T.quick } }}
-              transition={SPRING}
-              className="inline-flex h-8 items-center gap-2 rounded-lg border border-line bg-surface-2 pl-1.5 pr-1 text-xs"
-            >
-              <Avatar name={s.channel} tint={tintOf(s)} size={20} />
-              {s.channel}
-              <button onClick={() => onStop(s)} className="grid size-6 place-items-center rounded-md text-subtle transition-colors duration-150 hover:bg-white/[0.06] hover:text-text" aria-label={`Stop clipping ${s.channel}`}>
-                <Square className="size-3" fill="currentColor" />
-              </button>
-            </motion.span>
-          ))}
-        </AnimatePresence>
-      </div>
+    <div className="mb-4 flex items-center gap-3">
+      {live ? <span className="live-ping size-2 rounded-full bg-pink" /> : null}
+      <h2 className="font-poster text-[28px] font-black uppercase leading-none">{title}</h2>
+      {count ? <span className="num border border-white/15 px-1.5 py-0.5 text-xs text-muted">{count}</span> : null}
+      <span className="h-px flex-1 bg-line" />
     </div>
   );
 }
 
-/** Start / stop clipping button used in rows and the spotlight. */
-function ClipButton({ clipping, onClick, size = "sm" }: { clipping: boolean; onClick: () => void; size?: "sm" | "md" }) {
-  const h = size === "md" ? "h-9 px-3.5 text-sm" : "h-8 px-3 text-xs";
+function Thumb({ j, className }: { j: Job; className: string }) {
   return (
-    <motion.button
-      onClick={onClick}
-      whileTap={{ scale: 0.97 }}
-      transition={{ duration: T.quick }}
-      aria-pressed={clipping}
-      className={`inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg font-medium transition-colors duration-150 ${h} ${
-        clipping ? "bg-pink/15 text-pink ring-1 ring-inset ring-pink/30 hover:bg-pink/20" : "bg-white text-black hover:bg-white/90"
-      }`}
-    >
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.span key={clipping ? "on" : "off"} className="inline-flex items-center gap-1.5" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4, transition: { duration: 0.1 } }} transition={{ duration: T.quick }}>
-          {clipping ? (
-            <>
-              <span className="live-ping size-1.5 rounded-full bg-pink" /> Clipping
-            </>
-          ) : (
-            <>
-              <Scissors className="size-3.5" /> Start clipping
-            </>
-          )}
-        </motion.span>
-      </AnimatePresence>
-    </motion.button>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-
-function Kpi({ icon: Icon, label, value, format = fmtInt, trend, note, hot }: { icon: React.ElementType; label: string; value: number; format?: (v: number) => string; trend?: number[]; note?: string; hot?: boolean }) {
-  const max = trend ? Math.max(...trend) : 1;
-  return (
-    <div className="relative p-5">
-      <div className="flex items-center gap-2 text-xs text-muted">
-        <Icon className={`size-3.5 ${hot ? "text-pink" : ""}`} strokeWidth={1.75} /> {label}
-      </div>
-      <div className="mt-3 flex items-end justify-between gap-3">
-        <div className={`num text-[28px] font-semibold leading-none ${hot ? "accent-text" : ""}`}>
-          <AnimatedNumber value={value} format={format} />
-        </div>
-        {trend ? (
-          <div className="flex h-7 items-end gap-[3px]" aria-hidden>
-            {trend.map((v, i) => (
-              <motion.span
-                key={i}
-                className={`w-1 rounded-full ${i === trend.length - 1 ? "bg-white/70" : "bg-white/15"}`}
-                initial={{ height: 0 }}
-                animate={{ height: `${Math.max(12, (v / max) * 100)}%` }}
-                transition={{ duration: T.slow, ease: EASE_OUT, delay: 0.15 + i * 0.03 }}
-              />
-            ))}
-          </div>
-        ) : note ? (
-          <span className="text-xs text-subtle">{note}</span>
-        ) : null}
-      </div>
+    <div className={`relative shrink-0 overflow-hidden bg-black ${className}`}>
+      {j.vid ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={`https://i.ytimg.com/vi/${j.vid}/mqdefault.jpg`} alt="" className="size-full object-cover opacity-85" />
+      ) : (
+        <div className="grid size-full place-items-center bg-[radial-gradient(circle_at_30%_30%,rgba(255,46,136,0.35),transparent_70%)]"><FileVideo className="size-5 text-subtle" /></div>
+      )}
     </div>
   );
 }
 
-/* ------------------------------------------------------------------ */
-
-function Spotlight({ s, clipping, onToggle }: { s: Stream; clipping: boolean; onToggle: () => void }) {
-  const hot = s.hype >= 80;
+/** A job that is still running: big, readable, step-by-step progress. */
+function ProcessingRow({ j }: { j: Job }) {
+  const steps = j.steps?.length ? j.steps : ["Getting video", "Reading transcript", "Finding moments", "Cutting clips", "Finishing"];
+  const label = j.status === "queued" ? "Waiting for a free worker…" : `${steps[j.step] ?? "Working"}…${j.step === 3 && j.clips.length ? ` ${j.clips.length} cut so far` : ""}`;
   return (
-    <section className={`panel relative mb-6 overflow-hidden ${hot ? "glow-border" : ""}`} aria-label="Hottest stream">
-      {/* ambient tint follows the spotlight stream */}
-      <motion.div
-        className="pointer-events-none absolute -left-24 -top-24 size-[420px] rounded-full"
-        animate={{ background: `radial-gradient(closest-side, color-mix(in oklab, ${tintOf(s)} 22%, transparent), transparent)` }}
-        transition={{ duration: 0.8, ease: EASE }}
-      />
-      <AnimatePresence mode="popLayout" initial={false}>
-        <motion.div
-          key={s.id}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -6, transition: { duration: T.quick } }}
-          transition={{ duration: T.slow, ease: EASE_OUT }}
-          className="relative grid gap-6 p-5 md:grid-cols-[minmax(0,1fr)_auto] md:p-6"
-        >
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-subtle">Spotlight</span>
-              <LiveBadge viewers={fmtViewers(s.viewers)} />
-            </div>
-            <div className="mt-4 flex items-center gap-3">
-              <Avatar name={s.channel} tint={tintOf(s)} size={44} live />
+    <motion.article layout transition={{ layout: SPRING }} className="border border-pink/40 bg-surface p-4">
+      <div className="flex gap-4">
+        <Thumb j={j} className="aspect-video w-28 md:w-36" />
+        <div className="min-w-0 flex-1">
+          <div className="line-clamp-1 text-[15px] font-medium">{j.title}</div>
+          <div className="mt-0.5 flex items-center gap-3 text-xs text-subtle">
+            <span className="inline-flex items-center gap-1"><Clock className="size-3" /> {j.duration ? fmtDur(j.duration) : "checking length"}</span>
+            <span>started {fmtWhen(j.createdAt)}</span>
+          </div>
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.p key={j.status + j.step} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4, transition: { duration: 0.1 } }} transition={{ duration: T.base, ease: EASE }} className="mt-2 inline-flex items-center gap-1.5 text-sm text-pink">
+              <Loader2 className="size-4 animate-spin" /> {label}
+            </motion.p>
+          </AnimatePresence>
+        </div>
+      </div>
+      <ol className="mt-4 grid grid-cols-5 gap-1.5" aria-label="Progress">
+        {steps.map((s, i) => {
+          const doneStep = i < j.step;
+          const current = i === j.step && j.status === "running";
+          return (
+            <li key={s} className="min-w-0">
+              <div className="h-1.5 overflow-hidden bg-white/[0.07]">
+                <motion.span className={`block h-full ${current ? "bg-pink/60" : "bg-pink"}`} initial={false} animate={{ width: doneStep ? "100%" : current ? "55%" : "0%" }} transition={{ duration: 0.8, ease: EASE }} />
+              </div>
+              <span className={`mt-1 block truncate text-[10.5px] ${doneStep || current ? "text-muted" : "text-subtle/70"}`}>{s}</span>
+            </li>
+          );
+        })}
+      </ol>
+    </motion.article>
+  );
+}
+
+/** One finished video and its clips. */
+function FinishedVideo({ j, onPlay }: { j: Job; onPlay: (file: string) => void }) {
+  return (
+    <article className="border border-line bg-surface p-4">
+      <div className="mb-4 flex items-center gap-3">
+        <Thumb j={j} className="aspect-video w-20" />
+        <div className="min-w-0 flex-1">
+          <div className="line-clamp-1 text-sm font-medium">
+            {j.kind === "live" ? <span className="mr-1.5 bg-pink px-1 font-mono text-[10px] font-bold uppercase text-black">Live · {j.platform === "kick" ? "Kick" : "Twitch"}</span> : null}
+            {j.kind === "live" ? `${j.channel || j.login}: ` : ""}{j.title}
+          </div>
+          <div className="mt-0.5 flex items-center gap-2 text-xs text-subtle">
+            <span className="inline-flex items-center gap-1 text-green"><Check className="size-3.5" /> {j.clips.length} clips</span>
+            <span>· {fmtWhen(j.createdAt)}</span>
+          </div>
+        </div>
+      </div>
+      <ClipGrid jobId={j.id} clips={j.clips} onPlay={onPlay} />
+    </article>
+  );
+}
+
+function FailedList({ jobs }: { jobs: Job[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="mt-10" aria-label="Videos that didn't work">
+      <button onClick={() => setOpen((o) => !o)} className="flex items-center gap-2 text-sm text-subtle hover:text-text" aria-expanded={open}>
+        <ChevronDown className={`size-4 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
+        {jobs.length} video{jobs.length > 1 ? "s" : ""} didn&apos;t work · these don&apos;t count toward your limit
+      </button>
+      {open ? (
+        <ul className="mt-3 space-y-2">
+          {jobs.map((j) => (
+            <li key={j.id} className="flex items-start gap-3 border border-line bg-surface px-3 py-2.5 text-sm">
+              <AlertCircle className="mt-0.5 size-4 shrink-0 text-red" />
               <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <h2 className="font-display text-xl font-semibold tracking-[-0.01em]">{s.channel}</h2>
-                  <PlatformBadge platform={s.platform} />
-                  <PermissionBadge permission={s.permission} />
-                </div>
-                <p className="mt-0.5 truncate text-sm text-muted">{s.title}</p>
-                <a href={`https://${s.url}`} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 text-xs text-subtle transition-colors duration-150 hover:text-text">
-                  {s.url} <ExternalLink className="size-3" />
-                </a>
+                <div className="line-clamp-1 font-medium">{j.title}</div>
+                <div className="text-xs text-subtle">{j.error ?? "Something went wrong."} · {fmtWhen(j.createdAt)}</div>
               </div>
-            </div>
-
-            {s.thumbnail ? (
-              <a href={`https://${s.url}`} target="_blank" rel="noreferrer" className="group relative mt-5 block overflow-hidden rounded-xl border border-line" aria-label={`Watch ${s.channel} live on Twitch`}>
-                <LiveThumb src={s.thumbnail} alt={`Live GTA 6 gameplay from ${s.channel}`} className="aspect-video w-full transition-transform duration-500 group-hover:scale-[1.02]" />
-                <span className="absolute left-3 top-3"><LiveBadge viewers={fmtViewers(s.viewers)} /></span>
-                <span className="absolute bottom-3 right-3 rounded-md bg-black/70 px-2 py-1 text-[11px] text-white/85 backdrop-blur">Live preview · twitch.tv/{s.url.split("/")[1]}</span>
-              </a>
-            ) : null}
-
-            <div className="mt-6">
-              <div className="mb-2 flex items-center justify-between text-xs text-subtle">
-                <span>Chat activity · last 30s</span>
-                <span className="num text-muted">{s.chatRate} msg/s</span>
-              </div>
-              <Waveform data={s.history} hot={hot} tint={tintOf(s)} className={s.thumbnail ? "h-14" : "h-24"} />
-            </div>
-
-            <dl className="mt-5 grid grid-cols-3 gap-4 border-t border-line pt-4 text-sm">
-              <Stat icon={Eye} label="Viewers" value={<AnimatedNumber value={s.viewers} format={fmtViewers} />} />
-              <Stat icon={Clock} label="Uptime" value={s.uptime} />
-              <Stat icon={Scissors} label="Clips today" value={s.clipsToday} />
-            </dl>
-          </div>
-
-          <div className="flex flex-row items-center gap-5 md:flex-col md:justify-center md:border-l md:border-line md:pl-6">
-            <HypeGauge value={s.hype} size={132}>
-              <div className="text-center">
-                <motion.div key={hot ? "h" : "c"} initial={{ scale: hot ? 1.25 : 1 }} animate={{ scale: 1 }} transition={SPRING_EVENT} className={`num text-[34px] font-semibold leading-none ${hot ? "accent-text" : ""}`}>
-                  <AnimatedNumber value={s.hype} />
-                </motion.div>
-                <div className="mt-1 text-[11px] uppercase tracking-[0.14em] text-subtle">Hype</div>
-              </div>
-            </HypeGauge>
-            <div className="flex flex-col items-center gap-2">
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.div
-                  key={!clipping ? "off" : hot ? "clip" : "watch"}
-                  initial={{ opacity: 0, y: 6, scale: 0.96 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -4, transition: { duration: T.quick } }}
-                  transition={hot && clipping ? SPRING_EVENT : { duration: T.base, ease: EASE }}
-                >
-                  {clipping && hot ? (
-                    <span className="inline-flex items-center gap-2 rounded-lg accent-bg px-3 py-1.5 text-xs font-semibold text-white shadow-[0_8px_24px_-8px_rgba(255,46,136,0.8)]">
-                      <Loader2 className="size-3.5 animate-spin" /> Making a clip
-                    </span>
-                  ) : clipping ? (
-                    <span className="inline-flex items-center gap-2 rounded-lg bg-white/[0.04] px-3 py-1.5 text-xs text-muted ring-1 ring-inset ring-white/[0.06]">
-                      <span className="live-dot size-1.5 rounded-full bg-green" /> Watching for spikes
-                    </span>
-                  ) : (
-                    <span className="text-xs text-subtle">{hot ? "Spiking — not being clipped" : "Not clipping this stream"}</span>
-                  )}
-                </motion.div>
-              </AnimatePresence>
-              <ClipButton clipping={clipping} onClick={onToggle} size="md" />
-            </div>
-          </div>
-        </motion.div>
-      </AnimatePresence>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </section>
   );
 }
 
-function Stat({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: React.ReactNode }) {
+function EmptyState() {
+  const steps = [
+    ["1", "Paste or upload", "A YouTube link with captions, or any video file up to 8 GB."],
+    ["2", "We find the moments", "AI reads the whole video and picks the funniest and wildest bits."],
+    ["3", "Download your Shorts", "Captioned 9:16 clips, facecam on top, ready to post."],
+  ];
   return (
-    <div>
-      <dt className="flex items-center gap-1.5 text-xs text-subtle"><Icon className="size-3.5" strokeWidth={1.75} />{label}</dt>
-      <dd className="num mt-1 font-medium">{value}</dd>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-
-const COLS = "lg:grid-cols-[24px_minmax(180px,1.6fr)_60px_minmax(100px,1fr)_minmax(60px,0.6fr)_128px]";
-
-function StreamTable({ streams, active, onToggle }: { streams: Stream[]; active: Set<string>; onToggle: (s: Stream) => void }) {
-  return (
-    <div className="panel overflow-hidden" role="table" aria-label="Live streams">
-      <div role="row" className={`hidden ${COLS} items-center gap-3 border-b border-line px-4 py-2.5 text-[11px] font-medium uppercase tracking-[0.1em] text-subtle lg:grid`}>
-        <span role="columnheader">#</span>
-        <span role="columnheader">Stream</span>
-        <span role="columnheader" className="text-right">Viewers</span>
-        <span role="columnheader">Hype</span>
-        <span role="columnheader">Activity</span>
-        <span role="columnheader" className="text-right">Action</span>
-      </div>
-      <motion.div initial="hidden" animate="show" variants={{ show: { transition: { staggerChildren: 0.03, delayChildren: 0.1 } } }}>
-        {streams.map((s, i) => (
-          <Row key={s.id} s={s} rank={i + 1} clipping={active.has(s.id)} onToggle={() => onToggle(s)} />
-        ))}
-      </motion.div>
-      {!streams.length ? <p className="px-4 py-10 text-center text-sm text-subtle">No live streams on this platform right now.</p> : null}
-    </div>
-  );
-}
-
-function Row({ s, rank, clipping, onToggle }: { s: Stream; rank: number; clipping: boolean; onToggle: () => void }) {
-  const hot = s.hype >= 80;
-  return (
-    <motion.div
-      layout="position"
-      role="row"
-      variants={{ hidden: { opacity: 0, y: 8 }, show: { opacity: 1, y: 0, transition: { duration: T.base, ease: EASE_OUT } } }}
-      transition={{ layout: SPRING }}
-      className={`relative grid grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-3 border-b border-line px-4 py-3 transition-colors duration-250 last:border-b-0 hover:bg-white/[0.025] ${COLS} ${clipping ? "bg-pink/[0.035]" : ""}`}
-    >
-      <AnimatePresence>
-        {clipping ? (
-          <motion.span
-            className="absolute inset-y-2 left-0 w-[3px] origin-center rounded-r-full accent-bg"
-            initial={{ scaleY: 0 }}
-            animate={{ scaleY: 1 }}
-            exit={{ scaleY: 0, transition: { duration: T.quick } }}
-            transition={SPRING_EVENT}
-          />
-        ) : null}
-      </AnimatePresence>
-      <span role="cell" className="num text-sm text-subtle">{rank}</span>
-      <div role="cell" className="flex min-w-0 items-center gap-3">
-        {s.thumbnail ? (
-          <LiveThumb src={s.thumbnail} alt={`${s.channel} live`} className="h-9 w-16 shrink-0 rounded-md ring-1 ring-white/10" />
-        ) : (
-          <Avatar name={s.channel} tint={tintOf(s)} size={32} />
-        )}
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-medium" title={s.channel}>{s.channel}</span>
-            {hot ? (
-              <motion.span initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={SPRING_EVENT} className="inline-flex items-center gap-1 rounded accent-bg px-1.5 py-px text-[10px] font-semibold text-white">
-                <Flame className="size-2.5" /> SPIKE
-              </motion.span>
-            ) : null}
-          </div>
-          <div className="mt-0.5 flex min-w-0 items-center gap-2 text-xs">
-            <PlatformBadge platform={s.platform} />
-            <a href={`https://${s.url}`} target="_blank" rel="noreferrer" className="hidden truncate text-subtle transition-colors duration-150 hover:text-text sm:inline" title={s.url}>
-              {s.url}
-            </a>
-          </div>
+    <div className="grid gap-3 md:grid-cols-3">
+      {steps.map(([n, t, d]) => (
+        <div key={n} className="border border-line bg-surface p-5">
+          <span className="font-poster text-[40px] font-black leading-none text-pink">{n}</span>
+          <h3 className="mt-2 font-poster text-[22px] font-black uppercase leading-none">{t}</h3>
+          <p className="mt-2 text-sm text-muted">{d}</p>
         </div>
-      </div>
-      <span role="cell" className="num hidden text-right text-sm lg:block"><AnimatedNumber value={s.viewers} format={fmtViewers} /></span>
-      <div role="cell" className="flex items-center gap-3">
-        <div className="hidden w-full lg:block"><HypeBar value={s.hype} /></div>
-        <span className={`num w-7 text-right text-sm font-medium ${hot ? "text-pink" : ""}`}>{Math.round(s.hype)}</span>
-      </div>
-      <div role="cell" className="hidden lg:block">
-        <Sparkline data={s.history} className="h-7 w-full" />
-      </div>
-      <div role="cell" className="col-span-3 flex justify-end lg:col-span-1">
-        <ClipButton clipping={clipping} onClick={onToggle} />
-      </div>
-    </motion.div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-
-/** Vertical swipe feed — mirrors the Twitch mobile "Live" tab from the reference recording. */
-function PhoneFeed({ streams }: { streams: Stream[] }) {
-  return (
-    <div className="mx-auto w-full max-w-[360px]">
-      <div className="overflow-hidden rounded-[2.4rem] border border-line-strong bg-black p-1.5 shadow-[0_40px_80px_-30px_rgba(0,0,0,0.9)]">
-        <div className="overflow-hidden rounded-[2rem] bg-[#0b0b0e]">
-          <div className="flex items-center justify-center gap-6 pb-3 pt-4 text-[13px]">
-            <span className="text-subtle">Following</span>
-            <span className="relative font-medium">Live<span className="absolute -bottom-1.5 left-0 right-0 mx-auto h-0.5 w-5 rounded-full accent-bg" /></span>
-            <span className="text-subtle">Clips</span>
-          </div>
-          <div className="h-[600px] snap-y snap-mandatory overflow-y-auto">
-            {streams.map((s) => {
-              const hot = s.hype >= 80;
-              return (
-                <div key={s.id} className="relative flex h-[600px] snap-start flex-col justify-end overflow-hidden p-5">
-                  {s.thumbnail ? (
-                    <LiveThumb src={s.thumbnail} alt={`${s.channel} live`} className="absolute inset-0 h-full w-full opacity-80" />
-                  ) : (
-                    <SceneArt variant={(["sunset", "dusk", "night", "neon"] as const)[Number(s.id.slice(1)) % 4]} seed={Number(s.id.slice(1)) * 7} className="absolute inset-0 h-full w-full opacity-60" />
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/10 to-black/90" />
-                  <div className="absolute inset-x-6 top-[22%]">
-                    <Waveform data={s.history} hot={hot} tint={tintOf(s)} className="h-40" />
-                  </div>
-                  <div className="relative">
-                    <div className="flex items-center gap-3">
-                      <Avatar name={s.channel} tint={tintOf(s)} size={40} live />
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2"><span className="font-medium">{s.channel}</span><PermissionBadge permission={s.permission} /></div>
-                        <LiveBadge viewers={fmtViewers(s.viewers)} />
-                      </div>
-                    </div>
-                    <p className="mt-3 line-clamp-2 text-sm text-muted">{s.title}</p>
-                    <div className="mt-4">
-                      <div className="mb-1.5 flex justify-between text-[11px] text-subtle"><span>Hype</span><span className="num">{Math.round(s.hype)}</span></div>
-                      <HypeBar value={s.hype} />
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-      <p className="mt-3 text-center text-xs text-subtle">Scroll inside the phone to swipe streams</p>
+      ))}
     </div>
   );
 }
-
-/* ------------------------------------------------------------------ */
-
-function MomentsFeed({ moments, now }: { moments: Moment[]; now: number | null }) {
-  return (
-    <motion.aside
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: T.slow, ease: EASE_OUT, delay: 0.1 }}
-      className="panel flex flex-col xl:sticky xl:top-20 xl:max-h-[calc(100vh-6.5rem)]"
-      aria-label="Viral moments"
-    >
-      <div className="flex items-center gap-2 border-b border-line px-4 py-3.5">
-        <h2 className="text-sm font-medium">Viral moments</h2>
-        <span className="num rounded-md bg-white/[0.06] px-1.5 text-[11px] text-muted">{moments.length}</span>
-        <span className="ml-auto flex items-center gap-1.5 text-xs text-subtle"><span className="live-ping size-1.5 rounded-full bg-red" />Live</span>
-      </div>
-      <ol className="relative overflow-y-auto overflow-x-hidden px-4 py-2" aria-live="polite">
-        <span className="absolute bottom-4 left-[23px] top-4 w-px bg-line" aria-hidden />
-        <AnimatePresence initial={false}>
-          {moments.map((m) => (
-            <motion.li
-              key={m.id}
-              layout="position"
-              initial={{ opacity: 0, x: 12 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, transition: { duration: T.quick } }}
-              transition={{ duration: T.slow, ease: EASE_OUT, layout: SPRING }}
-              className="relative flex gap-3 py-3"
-            >
-              <StatusDot s={m.status} />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="font-medium text-text">{m.channel}</span>
-                  <span className="text-subtle">{ago(m.at, now)}</span>
-                  <span className={`num ml-auto font-semibold ${m.score >= 9 ? "accent-text" : "text-muted"}`}>{m.score.toFixed(1)}</span>
-                </div>
-                <p className="mt-1 text-[13.5px] leading-snug">{m.title}</p>
-                <div className="mt-1.5 flex items-center justify-between gap-2 text-xs text-subtle">
-                  <span className="truncate">{m.trigger}</span>
-                  <AnimatePresence mode="wait" initial={false}>
-                    <motion.span key={m.status} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4, transition: { duration: T.quick } }} transition={{ duration: T.base, ease: EASE }}>
-                      <StatusLabel s={m.status} />
-                    </motion.span>
-                  </AnimatePresence>
-                </div>
-                {m.status !== "ready" ? (
-                  <div className="mt-2 h-[3px] overflow-hidden rounded-full bg-white/[0.06]">
-                    <motion.div
-                      className="h-full rounded-full accent-bg"
-                      initial={{ width: "0%" }}
-                      animate={{ width: m.status === "detected" ? "35%" : "100%" }}
-                      transition={{ duration: m.status === "detected" ? 2.5 : 4.5, ease: "linear" }}
-                    />
-                  </div>
-                ) : null}
-              </div>
-            </motion.li>
-          ))}
-        </AnimatePresence>
-      </ol>
-    </motion.aside>
-  );
-}
-
-function StatusDot({ s }: { s: Moment["status"] }) {
-  const cls = s === "ready" ? "bg-green" : s === "clipping" ? "bg-cyan" : "accent-bg";
-  return (
-    <span className="relative z-10 mt-1 grid size-4 shrink-0 place-items-center rounded-full bg-surface ring-4 ring-surface">
-      <span className={`size-2 rounded-full ${cls} ${s !== "ready" ? "live-ping" : ""}`} />
-    </span>
-  );
-}
-
-function StatusLabel({ s }: { s: Moment["status"] }) {
-  if (s === "detected") return <span className="flex items-center gap-1 text-orange"><Flame className="size-3" /> Detected</span>;
-  if (s === "clipping") return <span className="flex items-center gap-1 text-cyan"><Loader2 className="size-3 animate-spin" /> Clipping</span>;
-  return <span className="flex items-center gap-1 text-green"><CheckCircle2 className="size-3" /> In queue</span>;
-}
-

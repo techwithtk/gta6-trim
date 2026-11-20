@@ -12,9 +12,9 @@ export function Segmented({ value, onChange, options, id }: { value: string; onC
           role="radio"
           aria-checked={value === v}
           onClick={() => onChange(v)}
-          className={`relative flex-1 rounded-md text-xs transition-colors duration-150 ${value === v ? "text-text" : "text-muted hover:text-text"}`}
+          className={`relative flex-1 whitespace-nowrap rounded-md px-3 text-xs transition-colors duration-150 ${value === v ? "font-semibold text-black" : "text-muted hover:text-text"}`}
         >
-          {value === v ? <motion.span layoutId={`seg-${id}`} className="absolute inset-0 -z-10 rounded-md bg-white/[0.09]" transition={SPRING} /> : null}
+          {value === v ? <motion.span layoutId={`seg-${id}`} className="absolute inset-0 -z-10 rounded-md bg-white" transition={SPRING} /> : null}
           {label}
         </button>
       ))}

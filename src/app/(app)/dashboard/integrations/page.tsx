@@ -1,264 +1,194 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { AnimatePresence, motion } from "motion/react";
-import { Plus, Check, Loader2, Lock, Trash2, FolderOpen, Info, ShieldCheck } from "lucide-react";
-import { PageTitle, SectionLabel } from "@/components/ui";
-import { Modal } from "@/components/Modal";
-import { Toggle } from "@/components/forms";
-import { EASE_OUT, SPRING, SPRING_EVENT, T } from "@/components/motion";
+import { useRouter, useSearchParams } from "next/navigation";
+import { AlertCircle, Check, Info, Loader2, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { usePlan } from "@/lib/account";
-import { MAX_ACCOUNTS_PER_PLATFORM, PLANS, type SocialPlatform, type StorageProvider } from "@/lib/plans";
+import { MAX_ACCOUNTS_PER_PLATFORM, type SocialPlatform } from "@/lib/plans";
+import { PLATFORM_META, refreshAccounts, useSocial, type SocialAccount } from "@/lib/social";
 
-/* ---------- brand-neutral marks (simple letter tiles, no copied logos) ---------- */
+const ORDER: SocialPlatform[] = ["tiktok", "youtube", "instagram", "facebook"];
+const STORAGE = [
+  { name: "Google Drive", color: "#1fa463", letter: "G" },
+  { name: "Dropbox", color: "#0061fe", letter: "D" },
+  { name: "OneDrive", color: "#0a72d4", letter: "O" },
+];
+
 function Mark({ letter, color, size = 36 }: { letter: string; color: string; size?: number }) {
   return (
-    <span className="grid shrink-0 place-items-center rounded-[10px] font-display font-semibold text-white" style={{ width: size, height: size, fontSize: size * 0.42, background: `linear-gradient(145deg, ${color}, color-mix(in oklab, ${color} 55%, #09090b))` }}>
+    <span className="grid shrink-0 place-items-center border-2 border-black font-poster font-black text-white" style={{ width: size, height: size, fontSize: size * 0.5, background: color }}>
       {letter}
     </span>
   );
 }
 
-const STORAGE: { id: StorageProvider; name: string; color: string; letter: string; via: string }[] = [
-  { id: "gdrive", name: "Google Drive", color: "#1fa463", letter: "G", via: "Google" },
-  { id: "dropbox", name: "Dropbox", color: "#0061fe", letter: "D", via: "Dropbox" },
-  { id: "onedrive", name: "OneDrive", color: "#0a72d4", letter: "O", via: "Microsoft" },
-  { id: "box", name: "Box", color: "#0b5cd5", letter: "B", via: "Box" },
-];
-
-const SOCIAL: { id: SocialPlatform; name: string; color: string; letter: string; note: string }[] = [
-  { id: "instagram", name: "Instagram", color: "#e1306c", letter: "I", note: "Needs a Business or Creator account" },
-  { id: "facebook", name: "Facebook Pages", color: "#1877f2", letter: "F", note: "Posts as Reels to a Page you manage" },
-  { id: "youtube", name: "YouTube", color: "#ff0033", letter: "Y", note: "Uploads as Shorts" },
-  { id: "tiktok", name: "TikTok", color: "#25f4ee", letter: "T", note: "Public posting after TikTok app review" },
-];
-
-type Account = { id: string; handle: string; autopost: boolean };
-const minPlanFor = (p: StorageProvider) => PLANS.find((pl) => pl.limits.storage.includes(p))!;
-
 export default function IntegrationsPage() {
+  return <Suspense fallback={<div className="h-64 animate-pulse bg-surface" />}><Integrations /></Suspense>;
+}
+
+function Integrations() {
   const plan = usePlan();
-  const perPlatform = Math.min(plan.limits.accountsPerPlatform, MAX_ACCOUNTS_PER_PLATFORM);
+  const postable = plan.limits.autopost;
+  const social = useSocial(postable);
+  const router = useRouter();
+  const params = useSearchParams();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
 
-  const [storage, setStorage] = useState<Partial<Record<StorageProvider, { folder: string; auto: boolean }>>>({ gdrive: { folder: "My Drive / GTA6 Trim", auto: true } });
-  const [accounts, setAccounts] = useState<Record<SocialPlatform, Account[]>>({
-    instagram: [{ id: "a1", handle: "@gta6trim", autopost: true }],
-    facebook: [],
-    youtube: [{ id: "a2", handle: "GTA6 Trim", autopost: true }, { id: "a3", handle: "GTA 6 Moments", autopost: false }],
-    tiktok: [{ id: "a4", handle: "@gta6trim", autopost: true }],
-  });
-  const [connecting, setConnecting] = useState<{ kind: "storage"; id: StorageProvider } | { kind: "social"; id: SocialPlatform } | null>(null);
-  const [busy, setBusy] = useState(false);
+  // Coming back from the platform's login page: show the result, refresh the list, clean the URL.
+  useEffect(() => {
+    const connected = params.get("connected") as SocialPlatform | null;
+    if (!connected) return;
+    const name = PLATFORM_META[connected]?.name ?? "Account";
+    // bundle.social adds "<platform>-callback" on success, or an error key such as "facebook-not-enough-pages".
+    const errKey = [...params.keys()].find((k) => k !== "connected" && !k.endsWith("-callback") && k !== "errorReason");
+    const t = setTimeout(() => {
+      setNotice(errKey ? { tone: "bad", text: friendlyError(errKey, name, params.get("errorReason")) } : { tone: "ok", text: `${name} connected.` });
+      refreshAccounts();
+      router.replace("/dashboard/integrations", { scroll: false });
+    }, 0);
+    return () => clearTimeout(t);
+  }, [params, router]);
 
-  const target = connecting ? (connecting.kind === "storage" ? STORAGE.find((s) => s.id === connecting.id)! : SOCIAL.find((s) => s.id === connecting.id)!) : null;
-
-  // Mock OAuth: real version redirects to the provider's consent screen and stores the refresh token server-side.
-  const authorize = () => {
-    if (!connecting) return;
-    setBusy(true);
-    setTimeout(() => {
-      if (connecting.kind === "storage") {
-        setStorage((s) => ({ ...s, [connecting.id]: { folder: connecting.id === "gdrive" ? "My Drive / GTA6 Trim" : "/Apps/GTA6 Trim", auto: true } }));
-      } else {
-        const id = connecting.id;
-        setAccounts((a) => {
-          const n = a[id].length + 1;
-          return { ...a, [id]: [...a[id], { id: `${id}-${Date.now()}`, handle: id === "youtube" || id === "facebook" ? `GTA Clips ${n}` : `@gtaclips.${n}`, autopost: true }] };
-        });
-      }
-      setBusy(false);
-      setConnecting(null);
-    }, 1200);
+  const connect = async (platform: SocialPlatform) => {
+    setBusy(platform); setNotice(null);
+    try {
+      const r = await fetch("/api/social/connect", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ platform }) });
+      const d = await r.json();
+      if (!r.ok || !d.url) throw new Error(d.error ?? "Couldn't start connecting.");
+      window.location.assign(d.url);
+    } catch (e) {
+      setNotice({ tone: "bad", text: e instanceof Error ? e.message : "Couldn't start connecting." });
+      setBusy(null);
+    }
   };
+  const remove = async (a: SocialAccount) => {
+    if (!window.confirm(`Disconnect ${a.displayName || a.username}? Scheduled posts to it will be cancelled.`)) return;
+    setBusy(a.id); setNotice(null);
+    try {
+      const r = await fetch(`/api/social/accounts/${encodeURIComponent(a.id)}`, { method: "DELETE" });
+      if (!r.ok) throw new Error((await r.json()).error ?? "Couldn't disconnect.");
+      await refreshAccounts();
+    } catch (e) {
+      setNotice({ tone: "bad", text: e instanceof Error ? e.message : "Couldn't disconnect." });
+    } finally { setBusy(null); }
+  };
+
+  const perPlatform = Math.min(social.perPlatform || plan.limits.accountsPerPlatform, MAX_ACCOUNTS_PER_PLATFORM);
 
   return (
     <>
-      <PageTitle title="Integrations"
-        art="dusk" sub="Save clips to your cloud storage and auto-post them to your social accounts" />
-
-      {/* ---------- Storage ---------- */}
-      <SectionLabel right={<span className="text-xs text-subtle">Clips upload as 1080p MP4 + caption file</span>}>Cloud storage</SectionLabel>
-      <div className="mb-10 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {STORAGE.map((p, i) => {
-          const conn = storage[p.id];
-          const allowed = plan.limits.storage.includes(p.id);
-          return (
-            <motion.section key={p.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: T.slow, ease: EASE_OUT, delay: i * 0.05 }} className={`panel flex flex-col p-4 ${conn ? "!border-green/30" : ""}`}>
-              <div className="flex items-center gap-3">
-                <Mark letter={p.letter} color={p.color} />
-                <div className="min-w-0">
-                  <div className="text-sm font-medium">{p.name}</div>
-                  <AnimatePresence mode="wait" initial={false}>
-                    <motion.div key={conn ? "on" : "off"} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, transition: { duration: 0.1 } }} className="text-xs">
-                      {conn ? <span className="inline-flex items-center gap-1 text-green"><Check className="size-3" /> Connected</span> : <span className="text-subtle">Not connected</span>}
-                    </motion.div>
-                  </AnimatePresence>
-                </div>
-                {!allowed ? <span className="ml-auto inline-flex items-center gap-1 rounded-md bg-white/[0.05] px-1.5 py-0.5 text-[11px] text-muted ring-1 ring-inset ring-white/10"><Lock className="size-3" />{minPlanFor(p.id).name}</span> : null}
-              </div>
-
-              {conn ? (
-                <div className="mt-4 space-y-3 text-xs">
-                  <div className="flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-muted"><FolderOpen className="size-3.5 shrink-0" /><span className="truncate">{conn.folder}</span></div>
-                  <label className="flex items-center justify-between gap-3">
-                    <span className="text-muted">Auto-upload new clips</span>
-                    <Toggle on={conn.auto} onChange={(v) => setStorage((s) => ({ ...s, [p.id]: { ...conn, auto: v } }))} label={`Auto-upload to ${p.name}`} />
-                  </label>
-                  <button onClick={() => setStorage((s) => { const n = { ...s }; delete n[p.id]; return n; })} className="text-subtle transition-colors duration-150 hover:text-red">Disconnect</button>
-                </div>
-              ) : (
-                <div className="mt-auto pt-4">
-                  {allowed ? (
-                    <button onClick={() => setConnecting({ kind: "storage", id: p.id })} className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-white text-sm font-medium text-black transition-colors duration-150 hover:bg-white/90">
-                      Connect {p.name}
-                    </button>
-                  ) : (
-                    <Link href="/dashboard/billing" className="inline-flex h-9 w-full items-center justify-center rounded-lg border border-line-strong text-sm text-muted transition-colors duration-150 hover:text-text">Upgrade to unlock</Link>
-                  )}
-                </div>
-              )}
-            </motion.section>
-          );
-        })}
+      <div className="mb-7">
+        <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-subtle">Post without leaving GTA6 Trim</p>
+        <h1 className="mt-1 font-poster text-[clamp(44px,6vw,64px)] font-black uppercase leading-[0.9]">Integra<span className="text-pink">tions.</span></h1>
+        <p className="mt-2 max-w-xl text-sm text-muted">Connect your accounts once. Then press <span className="text-text">Post</span> under any clip to publish it or schedule it.</p>
       </div>
 
-      {/* ---------- Social ---------- */}
-      <SectionLabel
-        right={
-          <span className="inline-flex items-center gap-1.5 text-xs text-subtle">
-            <ShieldCheck className="size-3.5" />
-            {plan.limits.autopost ? `${plan.name}: ${perPlatform} per platform` : "Studio plan"}
-          </span>
-        }
-      >
-        Auto-post accounts
-      </SectionLabel>
-      {!plan.limits.autopost ? (
-        <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: T.slow, ease: EASE_OUT, delay: 0.15 }} className="panel flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
-          <div className="flex -space-x-2">
-            {SOCIAL.map((p) => <Mark key={p.id} letter={p.letter} color={p.color} />)}
-          </div>
+      {notice ? (
+        <p role="status" className={`mb-5 flex items-center gap-2 border px-4 py-3 text-sm ${notice.tone === "ok" ? "border-green/40 bg-green/[0.07] text-green" : "border-red/40 bg-red/[0.07] text-red"}`}>
+          {notice.tone === "ok" ? <Check className="size-4 shrink-0" /> : <AlertCircle className="size-4 shrink-0" />} {notice.text}
+        </p>
+      ) : null}
+
+      <div className="mb-4 flex items-center gap-3">
+        <h2 className="font-poster text-[28px] font-black uppercase leading-none">Social accounts</h2>
+        <span className="h-px flex-1 bg-line" />
+        <span className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider text-subtle"><ShieldCheck className="size-3.5" /> {postable ? `${perPlatform} per platform` : "Studio plan"}</span>
+      </div>
+
+      {!postable ? (
+        <section className="flex flex-col gap-4 border-2 border-white/85 bg-surface p-5 shadow-[6px_6px_0_var(--pink)] sm:flex-row sm:items-center">
+          <div className="flex -space-x-1.5">{ORDER.map((p) => <Mark key={p} letter={PLATFORM_META[p].letter} color={PLATFORM_META[p].color} />)}</div>
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium">Auto-posting is on the Studio plan</div>
-            <p className="mt-1 text-xs text-subtle">
-              On {plan.name}, download your Shorts (or save them to your cloud storage above) and post them yourself. Studio posts and schedules them to TikTok, YouTube Shorts, Instagram Reels and Facebook for you, with up to {MAX_ACCOUNTS_PER_PLATFORM} accounts on each.
-            </p>
+            <div className="font-poster text-[22px] font-black uppercase leading-none">Posting is on the Studio plan</div>
+            <p className="mt-1.5 text-sm text-muted">On {plan.name}, download your Shorts and post them yourself. Studio posts and schedules them to TikTok, YouTube Shorts, Instagram Reels and Facebook, with up to {MAX_ACCOUNTS_PER_PLATFORM} accounts on each.</p>
           </div>
-          <Link href="/dashboard/billing" className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-white px-4 text-sm font-medium text-black transition-opacity duration-150 hover:opacity-90">
-            Upgrade to Studio
-          </Link>
-        </motion.section>
+          <Link href="/dashboard/billing" className="inline-flex h-10 shrink-0 items-center justify-center border-2 border-black bg-pink px-4 font-poster text-[17px] font-black uppercase text-black shadow-[3px_3px_0_#fafafa]">Upgrade to Studio</Link>
+        </section>
+      ) : social.error ? (
+        <p className="flex items-center gap-2 border border-orange/40 bg-orange/[0.07] px-4 py-3 text-sm text-orange"><AlertCircle className="size-4 shrink-0" /> {social.error}</p>
       ) : (
-      <div className="grid gap-4 lg:grid-cols-2">
-        {SOCIAL.map((p, i) => {
-          const list = accounts[p.id];
-          const atPlan = list.length >= perPlatform;
-          const atMax = list.length >= MAX_ACCOUNTS_PER_PLATFORM;
-          return (
-            <motion.section key={p.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: T.slow, ease: EASE_OUT, delay: 0.15 + i * 0.05 }} className="panel p-4">
-              <div className="flex items-center gap-3">
-                <Mark letter={p.letter} color={p.color} />
-                <div className="min-w-0">
-                  <div className="text-sm font-medium">{p.name}</div>
-                  <div className="truncate text-xs text-subtle">{p.note}</div>
-                </div>
-                <div className="ml-auto text-right">
-                  <div className="num text-sm">{list.length} / {perPlatform}</div>
-                  <div className="mt-1 flex justify-end gap-1" aria-hidden>
-                    {Array.from({ length: MAX_ACCOUNTS_PER_PLATFORM }, (_, k) => (
-                      <motion.span
-                        key={k}
-                        className="h-1 w-4 rounded-full"
-                        animate={{ backgroundColor: k < list.length ? "rgb(255,46,136)" : k < perPlatform ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.04)" }}
-                        transition={{ duration: T.base }}
-                      />
-                    ))}
+        <div className="grid gap-4 lg:grid-cols-2">
+          {ORDER.map((p) => {
+            const m = PLATFORM_META[p];
+            const list = social.accounts.filter((a) => a.platform === p);
+            const full = list.length >= perPlatform;
+            return (
+              <section key={p} className="border border-line bg-surface p-4">
+                <div className="flex items-center gap-3">
+                  <Mark letter={m.letter} color={m.color} />
+                  <div className="min-w-0">
+                    <div className="text-[15px] font-medium">{m.name}</div>
+                    <div className="truncate text-xs text-subtle">{m.note}</div>
+                  </div>
+                  <div className="ml-auto text-right">
+                    <div className="num text-sm">{social.ready ? list.length : "–"} / {perPlatform}</div>
+                    <div className="mt-1 flex justify-end gap-1" aria-hidden>
+                      {Array.from({ length: perPlatform }, (_, k) => <span key={k} className={`h-1.5 w-4 ${k < list.length ? "bg-pink" : "bg-white/10"}`} />)}
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <ul className="mt-4 space-y-2">
-                <AnimatePresence initial={false}>
-                  {list.map((a) => (
-                    <motion.li
-                      key={a.id}
-                      layout
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0, transition: { duration: T.quick } }}
-                      transition={{ duration: T.base, ease: EASE_OUT, layout: SPRING }}
-                      className="overflow-hidden"
-                    >
-                      <div className="flex items-center gap-3 rounded-lg border border-line bg-surface-2 px-3 py-2">
-                        <span className="grid size-7 place-items-center rounded-full bg-surface-3 text-[11px] font-semibold">{a.handle.replace(/[@.]/g, "").slice(0, 2).toUpperCase()}</span>
-                        <span className="min-w-0 flex-1 truncate text-sm">{a.handle}</span>
-                        <span className="hidden text-xs text-subtle sm:inline">Auto-post</span>
-                        <Toggle on={a.autopost} onChange={(v) => setAccounts((s) => ({ ...s, [p.id]: s[p.id].map((x) => (x.id === a.id ? { ...x, autopost: v } : x)) }))} label={`Auto-post to ${a.handle}`} />
-                        <button onClick={() => setAccounts((s) => ({ ...s, [p.id]: s[p.id].filter((x) => x.id !== a.id) }))} className="grid size-7 place-items-center rounded-md text-subtle transition-colors duration-150 hover:bg-red/10 hover:text-red" aria-label={`Remove ${a.handle}`}>
-                          <Trash2 className="size-3.5" />
-                        </button>
-                      </div>
-                    </motion.li>
-                  ))}
-                </AnimatePresence>
-              </ul>
-
-              <div className="mt-3">
-                {!atPlan ? (
-                  <button onClick={() => setConnecting({ kind: "social", id: p.id })} className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line-strong px-3 text-sm transition-colors duration-150 hover:bg-white/[0.05]">
-                    <Plus className="size-4" /> Add {p.name} account
-                  </button>
-                ) : atMax ? (
-                  <p className="text-xs text-subtle">Maximum of {MAX_ACCOUNTS_PER_PLATFORM} {p.name} accounts reached.</p>
+                {!social.ready ? (
+                  <div className="mt-4 h-11 animate-pulse bg-surface-2" />
                 ) : (
-                  <p className="text-xs text-subtle">
-                    {plan.name} allows {perPlatform} {p.name} {perPlatform === 1 ? "account" : "accounts"}. <Link href="/dashboard/billing" className="text-text underline underline-offset-2">Upgrade</Link> to add up to {MAX_ACCOUNTS_PER_PLATFORM}.
-                  </p>
+                  <ul className="mt-4 space-y-2">
+                    {list.map((a) => (
+                      <li key={a.id} className="flex items-center gap-3 border border-line bg-surface-2 px-3 py-2">
+                        <span className="grid size-7 place-items-center bg-surface-3 text-[11px] font-semibold">{(a.displayName || a.username).replace(/[@.]/g, "").slice(0, 2).toUpperCase()}</span>
+                        <span className="min-w-0 flex-1 truncate text-sm">{a.displayName || a.username}{a.username && a.displayName !== a.username ? <span className="ml-1.5 text-xs text-subtle">{a.username}</span> : null}</span>
+                        {!a.active ? <span className="text-xs text-orange">Reconnect</span> : <span className="hidden items-center gap-1 text-xs text-green sm:inline-flex"><Check className="size-3" /> Connected</span>}
+                        <button onClick={() => remove(a)} disabled={busy === a.id} className="grid size-7 place-items-center text-subtle transition-colors duration-150 hover:bg-red/10 hover:text-red" aria-label={`Disconnect ${a.displayName || a.username}`}>
+                          {busy === a.id ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
                 )}
-              </div>
-            </motion.section>
-          );
-        })}
-      </div>
+
+                <div className="mt-3">
+                  {full ? (
+                    <p className="text-xs text-subtle">Maximum of {perPlatform} {m.name} accounts reached.</p>
+                  ) : (
+                    <button onClick={() => connect(p)} disabled={!!busy || !social.ready} className="inline-flex h-9 items-center gap-1.5 border border-white/25 px-3 text-sm transition-colors duration-150 hover:border-pink hover:text-pink disabled:opacity-40">
+                      {busy === p ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />} Connect {m.name}
+                    </button>
+                  )}
+                </div>
+              </section>
+            );
+          })}
+        </div>
       )}
 
-      <p className="mt-6 flex items-start gap-2 text-xs text-subtle">
+      <p className="mt-5 flex items-start gap-2 text-xs text-subtle">
         <Info className="mt-0.5 size-3.5 shrink-0" />
-        We only ask for permission to upload files we create and to publish posts. We never read your other files or messages, and you can disconnect anytime.
+        You log in on each platform&apos;s own page. We never see your password, we only get permission to publish videos you choose, and you can disconnect anytime.
       </p>
 
-      {/* Mock OAuth consent step */}
-      <Modal open={!!connecting} onClose={() => !busy && setConnecting(null)} title={target ? `Connect ${target.name}` : "Connect"}>
-        {target ? (
-          <div className="space-y-4 p-5">
-            <div className="flex items-center gap-3">
-              <Mark letter={target.letter} color={target.color} size={44} />
-              <div className="text-sm text-muted">
-                You&apos;ll sign in with {"via" in target ? target.via : target.name} and approve GTA6 Trim. We&apos;ll come straight back here.
-              </div>
-            </div>
-            <ul className="space-y-2 rounded-xl border border-line bg-surface-2 p-3 text-sm">
-              {(connecting?.kind === "storage"
-                ? ["Create a GTA6 Trim folder", "Upload clips we make for you", "No access to your other files"]
-                : ["Publish videos you approve (or auto-post)", "Read basic profile info and post status", "No access to messages or followers"]
-              ).map((t) => (
-                <li key={t} className="flex items-center gap-2"><Check className="size-4 text-green" />{t}</li>
-              ))}
-            </ul>
-            <div className="flex justify-end gap-2">
-              <button disabled={busy} onClick={() => setConnecting(null)} className="h-9 rounded-lg border border-line-strong px-4 text-sm text-muted transition-colors duration-150 hover:text-text disabled:opacity-40">Cancel</button>
-              <motion.button whileTap={{ scale: 0.97 }} onClick={authorize} disabled={busy} className="inline-flex h-9 min-w-36 items-center justify-center gap-2 rounded-lg bg-white px-4 text-sm font-medium text-black transition-colors duration-150 hover:bg-white/90">
-                <AnimatePresence mode="wait" initial={false}>
-                  <motion.span key={busy ? "b" : "i"} className="inline-flex items-center gap-2" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4, transition: { duration: 0.1 } }} transition={SPRING_EVENT}>
-                    {busy ? <><Loader2 className="size-4 animate-spin" /> Connecting…</> : <>Continue to {"via" in target ? target.via : target.name}</>}
-                  </motion.span>
-                </AnimatePresence>
-              </motion.button>
-            </div>
+      <div className="mb-4 mt-10 flex items-center gap-3">
+        <h2 className="font-poster text-[28px] font-black uppercase leading-none">Cloud storage</h2>
+        <span className="h-px flex-1 bg-line" />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {STORAGE.map((s) => (
+          <div key={s.name} className="flex items-center gap-3 border border-line bg-surface p-4 opacity-70">
+            <Mark letter={s.letter} color={s.color} size={32} />
+            <span className="text-sm">{s.name}</span>
+            <span className="ml-auto border border-white/15 px-1.5 py-px font-mono text-[9.5px] font-bold uppercase tracking-wider text-subtle">Soon</span>
           </div>
-        ) : null}
-      </Modal>
+        ))}
+      </div>
     </>
   );
+}
+
+function friendlyError(code: string, name: string, reason: string | null) {
+  if (code.includes("not-enough-pages") || reason === "facebook-no-pages-found") return "No Facebook Page found. Posting needs a Page you manage, not a personal profile.";
+  if (code.includes("not-enough-channels")) return "That Google account has no YouTube channel yet. Create one on YouTube, then connect again.";
+  if (code.includes("not-professional-account") || code.includes("instagram-not-enough-accounts")) return "Instagram needs a Business or Creator account. Switch it in the Instagram app (Settings → Account type), then connect again.";
+  if (code.includes("not-enough-permissions")) return `${name} wasn't connected because some permissions were unticked. Connect again and allow everything asked.`;
+  if (reason === "facebook-two-factor-required") return "Facebook needs two-factor login turned on for this account. Turn it on, then connect again.";
+  return `${name} couldn't connect. Try again.`;
 }
