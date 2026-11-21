@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Eye, Loader2, Radio, Scissors, Send, Square, AlertCircle, Check } from "lucide-react";
+import { Eye, Film, Loader2, Radio, Scissors, Send, Square, AlertCircle, Check } from "lucide-react";
 import { usePlan } from "@/lib/account";
 import { addJob, refreshJobs, useJobs, type Job } from "@/lib/jobs";
 import { Modal } from "@/components/Modal";
-import { ClipGrid, ClipPlayer } from "@/components/ClipGrid";
+import { ClipPlayer } from "@/components/ClipGrid";
+import { TrimStudio } from "@/components/TrimStudio";
 import { PLATFORM_META, useSocial, type SocialAccount } from "@/lib/social";
 
 const SCORES = [{ v: 0.85, label: "8.5+ · only the very best" }, { v: 0.75, label: "7.5+ · recommended" }, { v: 0.65, label: "6.5+ · more posts" }];
@@ -354,8 +355,29 @@ function Session({ j, now, accounts, onAutoOff, onStop, onPlay }: { j: Job; now:
           </button>
         ) : null}
       </div>
+      {recording && !j.clips.length ? (
+        <div className="mt-4 hidden md:block">
+          <TrimStudio live title={j.title || j.channel || j.login || "Live stream"} channel={j.channel || j.login}
+            step={chunks === 0 ? "Recording the first 10 minutes" : "Finding moments"} stepIndex={chunks === 0 ? 0 : 2}
+            steps={["Recording", "Transcribing", "Finding moments", "Rendering"]} moments={[]} total={0} />
+        </div>
+      ) : null}
       <AutoPostLine j={j} accounts={accounts} onOff={onAutoOff} />
-      {j.clips.length ? <div className="mt-4"><ClipGrid jobId={j.id} clips={[...j.clips].reverse()} onPlay={onPlay} /></div> : null}
+      {j.clips.length ? (
+        <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-line pt-3">
+          <div className="flex gap-1.5">
+            {[...j.clips].reverse().slice(0, 5).map((c) => (
+              <button key={c.file} onClick={() => onPlay(c.file)} aria-label={`Play ${c.title}`} className="relative aspect-[9/16] w-11 overflow-hidden border border-line bg-black hover:border-pink">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`/api/import/${j.id}/${c.thumb}${c.v ? `?v=${c.v}` : ""}`} alt="" className="size-full object-cover" />
+              </button>
+            ))}
+          </div>
+          <Link href={`/dashboard/clips?job=${j.id}`} className="inline-flex h-9 items-center gap-2 border-2 border-black bg-pink px-3 font-poster text-[15px] font-black uppercase text-black shadow-[3px_3px_0_#fafafa] transition-transform duration-150 hover:-translate-y-0.5">
+            <Film className="size-4" strokeWidth={2.5} /> {j.clips.length} clip{j.clips.length === 1 ? "" : "s"} · post or save
+          </Link>
+        </div>
+      ) : null}
     </article>
   );
 }

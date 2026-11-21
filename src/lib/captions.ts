@@ -21,26 +21,3 @@ export const CAPTION_STYLES: CaptionStyle[] = [
 ];
 
 export const styleById = (id: string) => CAPTION_STYLES.find((s) => s.id === id) ?? CAPTION_STYLES[0];
-
-/** Mock transcript lines for the caption editor. */
-export const SAMPLE_TRANSCRIPT = [
-  { t: "0:00", text: "okay okay we just need the getaway car" },
-  { t: "0:04", text: "WAIT where is he going" },
-  { t: "0:07", text: "bro drove straight into the canal" },
-  { t: "0:11", text: "he had ONE job chat" },
-  { t: "0:15", text: "the cops are just watching him sink" },
-];
-
-/** Mock AI title/hashtag suggestions, cycled by "Regenerate". */
-export const AI_SUGGESTIONS = [
-  { title: "Getaway driver had ONE job 😭", tags: "#gta6 #gaming #funny #fyp #gtaonline" },
-  { title: "He drove the getaway car into a canal 💀", tags: "#gta6 #gamingclips #fail #viral" },
-  { title: "Worst heist escape in GTA 6 history", tags: "#gta6 #heist #gamer #shorts" },
-];
-
-export const PLATFORM_LIMITS = {
-  tiktok: { label: "TikTok caption", max: 2200 },
-  instagram: { label: "Instagram caption", max: 2200 },
-  youtube: { label: "YouTube Shorts title", max: 100 },
-  facebook: { label: "Facebook post", max: 5000 },
-} as const;

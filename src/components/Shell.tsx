@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Scissors, Radio, Plug, CreditCard } from "lucide-react";
+import { Scissors, Radio, Plug, CreditCard, Send, Film, Moon, Sun } from "lucide-react";
+import { setTheme, useTheme } from "@/lib/theme";
 import { motion, MotionConfig } from "motion/react";
 import { Ambient, EASE_OUT, SPRING } from "@/components/motion";
 import { SignOutButton } from "@clerk/nextjs";
@@ -11,8 +12,10 @@ import { monthUsage, useJobs } from "@/lib/jobs";
 import { TrimMark } from "@/components/BrandMark";
 
 const NAV = [
-  { href: "/dashboard", label: "Make clips", icon: Scissors, short: "Clips", soon: false },
+  { href: "/dashboard", label: "Make clips", icon: Scissors, short: "Make", soon: false },
   { href: "/dashboard/live", label: "Live clipping", icon: Radio, short: "Live" },
+  { href: "/dashboard/clips", label: "My clips", icon: Film, short: "Clips" },
+  { href: "/dashboard/posted", label: "Posted", icon: Send, short: "Posted" },
   { href: "/dashboard/integrations", label: "Integrations", icon: Plug, short: "Connect" },
   { href: "/dashboard/billing", label: "Plan & billing", icon: CreditCard, short: "Plan" },
 ];
@@ -102,6 +105,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-line bg-bg/80 px-4 backdrop-blur-xl md:px-8">
             <div className="md:hidden"><Logo /></div>
             <div className="ml-auto flex items-center gap-3">
+              <ThemeToggle />
               <Link href="/dashboard/billing" className="hidden h-8 items-center border border-line-strong px-3 font-mono text-[11px] font-semibold uppercase tracking-wider text-muted hover:text-text sm:inline-flex">
                 {account.plan ? `${plan.name} plan` : "Plan"}
               </Link>
@@ -132,7 +136,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Bottom nav (mobile) */}
-        <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden" aria-label="Main">
+        <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden" aria-label="Main">
           {NAV.map(({ href, short, icon: Icon }) => {
             const active = isActive(href);
             return (
@@ -146,5 +150,18 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </nav>
       </div>
     </MotionConfig>
+  );
+}
+
+/** Light / dark switch for the whole dashboard (remembered in this browser). */
+function ThemeToggle() {
+  const theme = useTheme();
+  const next = theme === "dark" ? "light" : "dark";
+  return (
+    <button onClick={() => setTheme(next)} aria-label={`Switch to ${next} mode`} title={`Switch to ${next} mode`}
+      className="inline-flex h-8 items-center gap-1.5 border border-line-strong px-2.5 font-mono text-[11px] font-semibold uppercase tracking-wider text-muted hover:text-text">
+      {theme === "dark" ? <Sun className="size-3.5" /> : <Moon className="size-3.5" />}
+      <span className="hidden sm:inline">{next === "light" ? "Light" : "Dark"}</span>
+    </button>
   );
 }

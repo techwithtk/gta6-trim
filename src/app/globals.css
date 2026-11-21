@@ -259,3 +259,59 @@ button, a, select { cursor: pointer; }
 .trim-thumb::-moz-range-thumb { pointer-events: auto; width: 12px; height: 38px; background: var(--pink); border: 2px solid #000; border-radius: 0; cursor: ew-resize; }
 .trim-thumb::-webkit-slider-runnable-track { height: 40px; background: transparent; }
 .trim-thumb::-moz-range-track { background: transparent; }
+
+/* ------------------------------------------------------------------ Dashboard light theme
+   The dashboard wrapper (#gt-app) carries data-theme="light" | "dark". Light swaps the tokens, then maps the
+   white-on-dark hairlines/tints used across the dashboard to ink-on-paper. Overlays on video (bg-black/…) stay dark. */
+#gt-app { background: var(--bg); color: var(--text); min-height: 100dvh; color-scheme: dark; }
+#gt-app[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f4f3ef;
+  --surface: #ffffff;
+  --surface-2: #f6f5f1;
+  --surface-3: #ebe9e3;
+  --line: rgba(17, 17, 19, 0.09);
+  --line-strong: rgba(17, 17, 19, 0.16);
+  --text: #111113;
+  --muted: #4b4b55;
+  --subtle: #6b6b76;
+  --pink: #e0126f;
+  --orange: #c2560c;
+  --cyan: #0284c7;
+  --green: #15803d;
+  --red: #dc2626;
+  --violet: #6d28d9;
+}
+#gt-app[data-theme="light"] ::selection { background: rgba(224, 18, 111, 0.22); }
+
+/* hairlines and tints drawn in white on dark → ink on paper */
+#gt-app[data-theme="light"] [class~="border-white/10"], #gt-app[data-theme="light"] [class~="ring-white/10"] { border-color: rgba(17,17,19,.10); --tw-ring-color: rgba(17,17,19,.10); }
+#gt-app[data-theme="light"] [class~="border-white/15"] { border-color: rgba(17,17,19,.13); }
+#gt-app[data-theme="light"] [class~="border-white/20"] { border-color: rgba(17,17,19,.17); }
+#gt-app[data-theme="light"] [class~="border-white/25"] { border-color: rgba(17,17,19,.22); }
+#gt-app[data-theme="light"] [class~="border-white/40"] { border-color: rgba(17,17,19,.32); }
+#gt-app[data-theme="light"] [class~="border-white/85"] { border-color: #111113; }
+#gt-app[data-theme="light"] [class~="hover:border-white/30"]:hover { border-color: rgba(17,17,19,.30); }
+#gt-app[data-theme="light"] [class~="hover:border-white/40"]:hover { border-color: rgba(17,17,19,.38); }
+#gt-app[data-theme="light"] [class~="bg-white/5"], #gt-app[data-theme="light"] [class~="bg-white/[0.03]"],
+#gt-app[data-theme="light"] [class~="bg-white/[0.04]"] { background-color: rgba(17,17,19,.035); }
+#gt-app[data-theme="light"] [class~="bg-white/[0.06]"], #gt-app[data-theme="light"] [class~="bg-white/[0.07]"],
+#gt-app[data-theme="light"] [class~="bg-white/[0.08]"] { background-color: rgba(17,17,19,.055); }
+#gt-app[data-theme="light"] [class~="bg-white/10"], #gt-app[data-theme="light"] [class~="bg-white/12"] { background-color: rgba(17,17,19,.075); }
+#gt-app[data-theme="light"] [class~="bg-white/15"], #gt-app[data-theme="light"] [class~="bg-white/25"],
+#gt-app[data-theme="light"] [class~="bg-white/35"] { background-color: rgba(17,17,19,.12); }
+#gt-app[data-theme="light"] [class~="hover:bg-white/[0.02]"]:hover, #gt-app[data-theme="light"] [class~="hover:bg-white/[0.05]"]:hover,
+#gt-app[data-theme="light"] [class~="hover:bg-white/[0.06]"]:hover { background-color: rgba(17,17,19,.05); }
+
+/* selected tabs: solid white chip with black text → solid ink chip with paper text */
+#gt-app[data-theme="light"] [class~="bg-white"][class~="text-black"] { background-color: #111113; color: #f4f3ef; }
+#gt-app[data-theme="light"] [class~="hover:bg-white/90"][class~="text-black"]:hover { background-color: #2a2a2e; }
+
+/* poster shadows drawn in off-white → ink */
+#gt-app[data-theme="light"] [class~="shadow-[3px_3px_0_#fafafa]"] { box-shadow: 3px 3px 0 #111113; }
+#gt-app[data-theme="light"] [class~="shadow-[4px_4px_0_#fafafa]"] { box-shadow: 4px 4px 0 #111113; }
+#gt-app[data-theme="light"] [class~="border-white/85"][class*="shadow-[6px_6px_0_var(--pink)]"] { box-shadow: 6px 6px 0 var(--pink); }
+
+/* text on dark video overlays and dark badges stays light */
+#gt-app[data-theme="light"] [class*="bg-black/"] { color: #fafafa; }
+#gt-app[data-theme="light"] [class*="bg-black/"] [class~="text-muted"], #gt-app[data-theme="light"] [class*="bg-black/"] [class~="text-subtle"] { color: #d4d4d8; }

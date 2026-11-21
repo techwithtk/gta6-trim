@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Check, ExternalLink, Loader2, Send, CalendarClock } from "lucide-react";
+import { Check, ExternalLink, Loader2, Send, CalendarClock, Sparkles } from "lucide-react";
+import { fetchPostText } from "@/lib/postText";
 import { Modal } from "@/components/Modal";
 import type { Clip } from "@/lib/jobs";
 import { addPost, PLATFORM_META, postFor, postLabel, type SocialAccount, type SocialPost } from "@/lib/social";
@@ -35,6 +36,17 @@ function PostForm({ jobId, clip, accounts, posts, onClose }: { jobId: string; cl
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<SocialPost | null>(null);
+  const [writing, setWriting] = useState(false);
+  const aiWrite = async () => {
+    setWriting(true); setError(null);
+    try {
+      const t = await fetchPostText(jobId, clip.file, !!caption && caption !== defaultCaption(clip));
+      setCaption(t.instagram.slice(0, 2200));
+      setTitle(t.youtube_title.slice(0, 100));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't write the text.");
+    } finally { setWriting(false); }
+  };
 
   const chosen = accounts.filter((a) => picked.has(a.id));
   const hasTikTok = chosen.some((a) => a.platform === "tiktok");
@@ -121,7 +133,14 @@ function PostForm({ jobId, clip, accounts, posts, onClose }: { jobId: string; cl
       ) : null}
 
       <label className="block">
-        <span className="mb-1.5 flex justify-between font-mono text-[11px] font-semibold uppercase tracking-wider text-subtle">Caption <span className="num normal-case">{caption.length} / 2200</span></span>
+        <span className="mb-1.5 flex items-center justify-between font-mono text-[11px] font-semibold uppercase tracking-wider text-subtle">
+          <span className="flex items-center gap-3">Caption
+            <button type="button" onClick={aiWrite} disabled={writing} className="inline-flex items-center gap-1 normal-case tracking-normal text-pink hover:underline disabled:opacity-50">
+              {writing ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />} Write with AI
+            </button>
+          </span>
+          <span className="num normal-case">{caption.length} / 2200</span>
+        </span>
         <textarea value={caption} onChange={(e) => setCaption(e.target.value.slice(0, 2200))} rows={4} className="w-full resize-y border border-white/20 bg-bg px-3 py-2 text-sm outline-none focus:border-pink" />
       </label>
 

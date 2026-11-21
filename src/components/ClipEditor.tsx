@@ -6,7 +6,8 @@ import { Modal } from "@/components/Modal";
 import { refreshJobs } from "@/lib/jobs";
 
 type Word = [number, number, string];
-type Data = { file: string; video: string; dur: number; start: number; end: number; hook: string; title: string; words: Word[]; editing: boolean; editError?: string | null };
+type Sticker = { t: number; emoji: string; spot: string };
+type Data = { file: string; video: string; dur: number; start: number; end: number; hook: string; title: string; words: Word[]; editing: boolean; editError?: string | null; stickers?: Sticker[]; stickersOff?: boolean };
 
 const MIN = 5, MAX = 90;
 const PRIMARY =
@@ -44,6 +45,8 @@ function Editor({ jobId, data, onClose }: { jobId: string; data: Data; onClose: 
   const [end, setEnd] = useState(data.end);
   const [hook, setHook] = useState(data.hook);
   const [edits, setEdits] = useState<Record<number, string>>({});
+  const allStickers = data.stickers ?? [];
+  const [stickersOn, setStickersOn] = useState(!data.stickersOff);
   const [t, setT] = useState(data.start);
   const [playing, setPlaying] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -55,7 +58,9 @@ function Editor({ jobId, data, onClose }: { jobId: string; data: Data; onClose: 
   const inCut = useMemo(() => data.words.map((w, i) => ({ w, i })).filter(({ w }) => w[0] >= start && w[0] < end - 0.05), [data.words, start, end]);
   const active = inCut.findIndex(({ w }, k) => t >= w[0] && (k + 1 >= inCut.length || t < inCut[k + 1].w[0]));
   const group = active >= 0 ? inCut.slice(Math.floor(active / 3) * 3, Math.floor(active / 3) * 3 + 3) : [];
-  const changed = start !== data.start || end !== data.end || hook.trim().toUpperCase() !== data.hook || Object.keys(edits).length > 0;
+  const changed = start !== data.start || end !== data.end || hook.trim().toUpperCase() !== data.hook || Object.keys(edits).length > 0 || stickersOn === !!data.stickersOff;
+  const inCutStickers = allStickers.filter((s) => s.t >= start + 2.6 && s.t <= end - 0.8);
+  const showing = stickersOn ? inCutStickers.find((s) => t >= s.t && t < s.t + 1.3) : undefined;
 
   const seek = (s: number) => { if (video.current) video.current.currentTime = s; setT(s); };
   const toggle = () => {
@@ -71,7 +76,7 @@ function Editor({ jobId, data, onClose }: { jobId: string; data: Data; onClose: 
   };
   const setStartTo = (s: number) => { const x = Math.max(0, Math.min(s, end - MIN)); setStart(Math.round(x * 10) / 10); seek(x); };
   const setEndTo = (s: number) => { const x = Math.min(data.dur, Math.max(s, start + MIN)); setEnd(Math.round(x * 10) / 10); };
-  const reset = () => { setStart(data.start); setEnd(data.end); setHook(data.hook); setEdits({}); seek(data.start); };
+  const reset = () => { setStart(data.start); setEnd(data.end); setHook(data.hook); setEdits({}); setStickersOn(!data.stickersOff); seek(data.start); };
 
   const save = async () => {
     setBusy(true); setError(null);
@@ -79,7 +84,7 @@ function Editor({ jobId, data, onClose }: { jobId: string; data: Data; onClose: 
       const words = Object.fromEntries(Object.entries(edits).filter(([i, v]) => v !== data.words[Number(i)][2]));
       const r = await fetch(`/api/clips/${jobId}/${data.file}/edit`, {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ start, end, hook, words }),
+        body: JSON.stringify({ start, end, hook, words, stickers: stickersOn }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error ?? "Couldn't save.");
@@ -109,6 +114,9 @@ function Editor({ jobId, data, onClose }: { jobId: string; data: Data; onClose: 
             <span className="pointer-events-none absolute inset-x-2 top-[52%] text-center font-poster text-[24px] font-black uppercase text-white [-webkit-text-stroke:1.5px_#000] [paint-order:stroke_fill]">
               {group.map(({ i }, k) => <span key={i} className={inCut[active]?.i === i ? "text-pink" : undefined}>{k ? " " : ""}{text(i)}</span>)}
             </span>
+          ) : null}
+          {showing ? (
+            <span className={`pointer-events-none absolute text-[44px] leading-none ${showing.spot === "left" ? "left-[7%] top-[47%]" : showing.spot === "top" ? "right-[6%] top-[4%]" : "right-[7%] top-[47%]"}`}>{showing.emoji}</span>
           ) : null}
           <button onClick={toggle} aria-label={playing ? "Pause" : "Play"} className="absolute bottom-2 left-2 grid size-9 place-items-center rounded-full bg-black/70 text-white">
             {playing ? <Pause className="size-4" fill="currentColor" /> : <Play className="size-4" fill="currentColor" />}
@@ -148,6 +156,18 @@ function Editor({ jobId, data, onClose }: { jobId: string; data: Data; onClose: 
           </label>
           <p className="mt-1 text-[11px] text-subtle">A short tease that makes people stay. Leave empty for no hook.</p>
         </section>
+
+        {/* Emoji stickers */}
+        {allStickers.length ? (
+          <section>
+            <label className="flex cursor-pointer items-center gap-3 text-sm">
+              <input type="checkbox" checked={stickersOn} onChange={(e) => setStickersOn(e.target.checked)} className="size-4 accent-[var(--pink)]" />
+              <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-subtle">Emoji stickers</span>
+              <span className="text-lg leading-none">{inCutStickers.map((s) => s.emoji).join(" ") || "—"}</span>
+            </label>
+            <p className="mt-1 text-[11px] text-subtle">Picked by AI from what&apos;s said. They pop in for about a second each.</p>
+          </section>
+        ) : null}
 
         {/* Caption words */}
         <section>

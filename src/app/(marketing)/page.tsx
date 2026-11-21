@@ -387,7 +387,7 @@ function VideoCard() {
 /* ------------------------------------------------------------------ */
 
 const TAKES = [
-  { t: "Pick the stream", d: "Every live GTA 6 stream on Twitch (Kick & YouTube next), sorted by who's popping off. Or paste a long YouTube link." },
+  { t: "Pick the stream", d: "Every live GTA 6 stream on Twitch and Kick, sorted by who's popping off. Or paste a long YouTube link." },
   { t: "We watch chat", d: "Message floods, emote walls and audio peaks mark the exact second something viral happens." },
   { t: "Cut & caption", d: "Facecam on top, gameplay below, animated captions burned in. Ready for vertical feeds." },
   { t: "Download or post", d: "Download every Short or drop it into Drive, Dropbox or OneDrive. On Studio, auto-post to up to 3 accounts per platform." },
@@ -722,7 +722,7 @@ function Ticket({ i, name, blurb, price, per, features, href, cta, tone, stamp, 
 const FAQS = [
   { q: "Do I need permission to clip other streamers?", a: "Yes. Clip your own streams, or streams whose creator allows clipping, like paid clipping campaigns. GTA6 Trim asks you to confirm before clipping someone else's stream or YouTube video." },
   { q: "Which platforms can I auto-post to?", a: `Auto-posting is on the Studio plan: TikTok, YouTube Shorts, Instagram Reels and Facebook Pages, up to ${MAX_ACCOUNTS_PER_PLATFORM} accounts each, with scheduling. On Starter and Pro you download your Shorts (or save them to your cloud storage) and post them yourself.` },
-  { q: "Where do the live streams come from?", a: "Live GTA 6 streams from Twitch today, with Kick and YouTube Live coming next. You choose which ones to clip." },
+  { q: "Where do the live streams come from?", a: "Live GTA 6 streams from Twitch and Kick, with YouTube Live coming next. You choose which ones to clip." },
   { q: "Can I clip long YouTube videos?", a: "Yes. Paste a YouTube link from your channel, or one you have rights to, and get back a batch of captioned Shorts." },
   { q: "Can I cancel anytime?", a: "Yes. Monthly or yearly, cancel from your dashboard whenever you want." },
   { q: "Are you affiliated with Rockstar Games?", a: "No. GTA6 Trim is an independent tool, not affiliated with or endorsed by Rockstar Games, Take-Two, Twitch, Kick or YouTube." },

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { PartyPopper, X } from "lucide-react";
+import { TrimStudio } from "@/components/TrimStudio";
 
 /** Shown once after a successful Dodo checkout (/dashboard?welcome=1). */
 export function WelcomeBanner() {
@@ -13,6 +14,7 @@ export function WelcomeBanner() {
     <AnimatePresence>
       {open ? (
         <motion.div
+          key="banner"
           role="status"
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -27,6 +29,11 @@ export function WelcomeBanner() {
           <button onClick={() => setOpen(false)} aria-label="Dismiss" className="text-muted hover:text-text">
             <X className="size-4" />
           </button>
+        </motion.div>
+      ) : null}
+      {open ? (
+        <motion.div key="studio" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mb-6 hidden md:block">
+          <TrimStudio demo title="This is what happens when you clip" step="Preview" stepIndex={0} steps={["Read", "Find", "Reframe", "Caption"]} moments={[]} />
         </motion.div>
       ) : null}
     </AnimatePresence>

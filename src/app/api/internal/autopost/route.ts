@@ -21,7 +21,7 @@ const fromWorker = (h: string | null) => {
  */
 export async function POST(req: NextRequest) {
   if (!fromWorker(req.headers.get("x-worker-secret"))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const b = (await req.json().catch(() => ({}))) as { uid?: string; jobId?: string; file?: string; title?: string; accounts?: string[]; consent?: boolean };
+  const b = (await req.json().catch(() => ({}))) as { uid?: string; jobId?: string; file?: string; title?: string; caption?: string; accounts?: string[]; consent?: boolean };
   if (!b.uid || !b.jobId || !/^[a-f0-9]{12}$/.test(b.jobId) || !b.file || !/^live_\d{3}_\d{2}\.mp4$/.test(b.file)) {
     return NextResponse.json({ error: "Bad request." }, { status: 400 });
   }
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     if (!videoUrl) return NextResponse.json({ error: "Clip not found." }, { status: 404 });
 
     const title = String(b.title ?? "").trim().slice(0, 100) || "GTA 6 moment";
-    const post = await createPost({ uid: b.uid, externalId: `${b.jobId}/${b.file}`, caption: `${title}\n\n#GTA6 #GTAVI #gaming #shorts`, title, videoUrl, accounts });
+    const post = await createPost({ uid: b.uid, externalId: `${b.jobId}/${b.file}`, caption: String(b.caption ?? "").trim().slice(0, 2200) || `${title}\n\n#GTA6 #GTAVI #gaming #shorts`, title, videoUrl, accounts });
     return NextResponse.json({ post }, { status: 201 });
   } catch (e) {
     const msg = e instanceof SocialError ? e.message : "Posting failed.";

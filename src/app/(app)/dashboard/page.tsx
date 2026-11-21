@@ -9,6 +9,7 @@ import { EASE, EASE_OUT, SPRING, SPRING_EVENT, T } from "@/components/motion";
 import { usePlan } from "@/lib/account";
 import { addJob, monthUsage, useJobs, type Job } from "@/lib/jobs";
 import { ClipGrid, ClipPlayer } from "@/components/ClipGrid";
+import { TrimStudio } from "@/components/TrimStudio";
 
 /* ---------- helpers ---------- */
 function parseYouTubeId(raw: string): string | null {
@@ -67,7 +68,7 @@ export default function MakeClipsPage() {
   const fileTooLong = file ? file.duration > maxSec : false;
   const canStart = source === "upload"
     ? upload.state === "done" && !!upload.key && !fileTooLong && rights && !outOfImports && !starting
-    : !!meta && meta.id === vid && !tooLong && meta.captions && !meta.isLive && rights && !outOfImports && !starting;
+    : !!meta && meta.id === vid && !tooLong && !meta.isLive && rights && !outOfImports && !starting;
   const linkError = touched && url && !vid ? "That doesn't look like a YouTube video link. Try youtube.com/watch?v=… or youtu.be/…" : null;
 
   // Real video details for the pasted link.
@@ -139,7 +140,6 @@ export default function MakeClipsPage() {
       : !vid ? "Paste a link to continue"
       : metaState === "loading" ? "Reading the video…"
       : metaState === "error" ? metaError
-      : meta && !meta.captions ? "This video has no English captions yet. Upload the file instead."
       : meta?.isLive ? "This stream is still live. Paste it after it ends."
       : tooLong ? "Video is over your plan's length limit"
       : !rights ? "Tick the rights box to continue"
@@ -232,7 +232,7 @@ export default function MakeClipsPage() {
                 </div>
                 <p id="yt-help" className={`mt-2 flex items-center gap-1.5 text-xs ${linkError ? "text-red" : "text-subtle"}`}>
                   {linkError ? <AlertCircle className="size-3.5" /> : null}
-                  {linkError ?? "Videos with English captions. Finished live replays work too. No captions? Upload the file instead."}
+                  {linkError ?? "Any public YouTube video in English. Finished live replays work too."}
                 </p>
 
                 <AnimatePresence initial={false}>
@@ -249,8 +249,6 @@ export default function MakeClipsPage() {
                           <div className="mt-1 text-xs text-subtle">{meta.channel}</div>
                           {tooLong ? (
                             <p className="mt-2 flex items-center gap-1.5 text-xs text-orange"><AlertCircle className="size-3.5" />Longer than your {plan.limits.ytMaxMinutes / 60}h limit. <Link href="/dashboard/billing" className="underline underline-offset-2">Upgrade</Link></p>
-                          ) : !meta.captions ? (
-                            <p className="mt-2 flex items-center gap-1.5 text-xs text-orange"><AlertCircle className="size-3.5" />No English captions. Upload the file instead.</p>
                           ) : (
                             <p className="mt-2 flex items-center gap-1.5 text-xs text-green"><Check className="size-3.5" />Ready to clip</p>
                           )}
@@ -305,6 +303,7 @@ export default function MakeClipsPage() {
           <motion.section id="processing" key="processing" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: T.slow, ease: EASE_OUT }} className="mb-10 scroll-mt-20" aria-label="Processing now">
             <SectionHead title="Processing now" count={processing.length} live />
             <div className="space-y-3">
+              <div className="mb-4 hidden md:block"><JobStudio j={processing[0]} /></div>
               {processing.map((j) => <ProcessingRow key={j.id} j={j} />)}
             </div>
           </motion.section>
@@ -356,6 +355,22 @@ function Thumb({ j, className }: { j: Job; className: string }) {
         <div className="grid size-full place-items-center bg-[radial-gradient(circle_at_30%_30%,rgba(255,46,136,0.35),transparent_70%)]"><FileVideo className="size-5 text-subtle" /></div>
       )}
     </div>
+  );
+}
+
+/** The animated Trim Studio, fed with this job's real title, thumbnail, current step and the clips cut so far. */
+function JobStudio({ j }: { j: Job }) {
+  const steps = j.steps?.length ? j.steps : ["Getting video", "Reading transcript", "Finding moments", "Cutting clips", "Finishing"];
+  return (
+    <TrimStudio
+      title={j.title || "Your video"}
+      poster={j.vid ? `https://i.ytimg.com/vi/${j.vid}/hqdefault.jpg` : undefined}
+      step={j.status === "queued" ? "Waiting for a worker" : steps[j.step] ?? "Working"}
+      stepIndex={Math.min(j.step, steps.length - 1)}
+      steps={steps}
+      moments={j.clips.map((c) => ({ thumb: `/api/import/${j.id}/${c.thumb}`, title: c.title, hook: c.hook, score: c.score }))}
+      total={j.clips.length}
+    />
   );
 }
 
@@ -447,7 +462,7 @@ function FailedList({ jobs }: { jobs: Job[] }) {
 
 function EmptyState() {
   const steps = [
-    ["1", "Paste or upload", "A YouTube link with captions, or any video file up to 8 GB."],
+    ["1", "Paste or upload", "A YouTube link, or any video file up to 8 GB."],
     ["2", "We find the moments", "AI reads the whole video and picks the funniest and wildest bits."],
     ["3", "Download your Shorts", "Captioned 9:16 clips, facecam on top, ready to post."],
   ];

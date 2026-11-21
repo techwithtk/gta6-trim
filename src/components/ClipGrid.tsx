@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Check, Download, HardDriveUpload, Loader2, Play, Scissors, Send, X } from "lucide-react";
+import { Check, Download, HardDriveUpload, Hash, Loader2, Play, Scissors, Send, X } from "lucide-react";
 import type { Clip } from "@/lib/jobs";
 import { usePlan } from "@/lib/account";
 import { postFor, postLabel, useSocial } from "@/lib/social";
 import { PostModal } from "@/components/PostModal";
 import { saveToDrive, useDrive } from "@/lib/drive";
 import { ClipEditor } from "@/components/ClipEditor";
+import { PostTextModal } from "@/components/PostTextModal";
 
 const fmtAt = (s: number) => {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
@@ -17,7 +18,10 @@ const fmtAt = (s: number) => {
 
 /** Grid of finished 9:16 Shorts: play, score, length, download, and (on Studio) post to social media. */
 export function ClipGrid({ jobId, clips, onPlay }: { jobId: string; clips: Clip[]; onPlay: (file: string) => void }) {
-  const postable = usePlan().limits.autopost;
+  const plan = usePlan();
+  const postable = plan.limits.autopost;
+  const aiText = plan.id !== "starter";
+  const [texting, setTexting] = useState<Clip | null>(null);
   const social = useSocial(postable);
   const [target, setTarget] = useState<Clip | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
@@ -66,6 +70,11 @@ export function ClipGrid({ jobId, clips, onPlay }: { jobId: string; clips: Clip[
                 <Scissors className="size-3" /> Edit
               </button>
             ) : null}
+            {aiText ? (
+              <button onClick={() => setTexting(c)} className="inline-flex items-center gap-1 font-mono text-[10.5px] font-semibold uppercase tracking-wider text-text underline-offset-2 hover:text-pink hover:underline">
+                <Hash className="size-3" /> Post text
+              </button>
+            ) : null}
             {drive.connected ? <DriveButton s={saved[c.file]} onSave={() => toDrive([c.file])} /> : null}
             {postable ? (
               <button onClick={() => setTarget(c)} className="inline-flex items-center gap-1 font-mono text-[10.5px] font-semibold uppercase tracking-wider text-pink underline-offset-2 hover:underline">
@@ -77,6 +86,7 @@ export function ClipGrid({ jobId, clips, onPlay }: { jobId: string; clips: Clip[
         </li>
       ))}
     </ul>
+    <PostTextModal target={texting ? { jobId, file: texting.file, title: texting.title } : null} onClose={() => setTexting(null)} />
     <ClipEditor target={editing ? { jobId, file: editing } : null} onClose={() => setEditing(null)} />
     {postable ? <PostModal target={target ? { jobId, clip: target } : null} accounts={social.accounts} posts={social.posts} onClose={() => setTarget(null)} /> : null}
     </>

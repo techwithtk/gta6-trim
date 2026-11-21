@@ -38,7 +38,7 @@ export const PLANS: Plan[] = [
     yearly: 39,
     limits: { liveSessions: 2, ytImports: 20, ytMaxMinutes: 120, clips: 200, autopost: false, accountsPerPlatform: 0, storage: ["gdrive"], captionStyles: 4, seats: 1 },
     features: [
-      "Live GTA 6 directory · Twitch (Kick & YouTube Live soon)",
+      "Live GTA 6 directory · Twitch & Kick (YouTube Live soon)",
       "2 live streams clipped at once",
       "20 YouTube long-form videos / month (up to 2h each)",
       "200 clips / month · 1080p, no watermark",
