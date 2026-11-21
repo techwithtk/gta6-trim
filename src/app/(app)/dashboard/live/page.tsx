@@ -2,11 +2,16 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Eye, Loader2, Radio, Scissors, Square, AlertCircle, Check } from "lucide-react";
+import { Eye, Loader2, Radio, Scissors, Send, Square, AlertCircle, Check } from "lucide-react";
 import { usePlan } from "@/lib/account";
 import { addJob, refreshJobs, useJobs, type Job } from "@/lib/jobs";
 import { Modal } from "@/components/Modal";
 import { ClipGrid, ClipPlayer } from "@/components/ClipGrid";
+import { PLATFORM_META, useSocial, type SocialAccount } from "@/lib/social";
+
+const SCORES = [{ v: 0.85, label: "8.5+ · only the very best" }, { v: 0.75, label: "7.5+ · recommended" }, { v: 0.65, label: "6.5+ · more posts" }];
+const GAPS = [{ v: 30, label: "every 30 min" }, { v: 60, label: "every hour" }, { v: 120, label: "every 2 hours" }, { v: 180, label: "every 3 hours" }];
+type AutoForm = { on: boolean; accounts: string[]; minScore: number; gapMin: number; consent: boolean };
 
 type LiveStream = { id: string; login: string; name: string; title: string; viewers: number; startedAt: string; thumbnail: string; url: string };
 type Platform = "twitch" | "kick";
@@ -37,6 +42,9 @@ export default function LivePage() {
   const [manual, setManual] = useState("");
   const [playing, setPlaying] = useState<{ job: string; file: string } | null>(null);
   const [now, setNow] = useState<number | null>(null);
+  const studio = plan.limits.autopost;
+  const social = useSocial(studio);
+  const [auto, setAuto] = useState<AutoForm>({ on: false, accounts: [], minScore: 0.75, gapMin: 60, consent: false });
 
   useEffect(() => {
     let live = true;
@@ -64,13 +72,17 @@ export default function LivePage() {
 
   const open = (login: string, name: string, p: Platform = platform) => {
     setError(null); setRights(false);
+    setAuto((a) => ({ ...a, on: false, consent: false, accounts: social.accounts.filter((x) => x.active).map((x) => x.id) }));
     setConfirm({ login, name, platform: /kick\.com\//i.test(login) ? "kick" : /twitch\.tv\//i.test(login) ? "twitch" : p });
   };
   const start = async () => {
     if (!confirm || !rights) return;
     setStarting(true); setError(null);
     try {
-      const r = await fetch("/api/live", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ login: confirm.login, platform: confirm.platform, rights }) });
+      const r = await fetch("/api/live", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
+        login: confirm.login, platform: confirm.platform, rights,
+        autopost: studio && auto.on && auto.accounts.length ? { accounts: auto.accounts, minScore: auto.minScore, gapMin: auto.gapMin, consent: auto.consent } : undefined,
+      }) });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error ?? "Couldn't start.");
       addJob(d);
@@ -80,6 +92,12 @@ export default function LivePage() {
       setError(e instanceof Error ? e.message : "Couldn't start.");
     } finally { setStarting(false); }
   };
+  const autoOff = async (j: Job) => {
+    await fetch(`/api/live/${j.id}/autopost`, { method: "POST" }).catch(() => {});
+    refreshJobs();
+  };
+  const tiktokPicked = social.accounts.some((a) => a.platform === "tiktok" && auto.accounts.includes(a.id));
+  const autoBlocked = studio && auto.on && (!auto.accounts.length || (tiktokPicked && !auto.consent));
   const stop = async (j: Job) => {
     await fetch(`/api/live/${j.id}/stop`, { method: "POST" }).catch(() => {});
     refreshJobs();
@@ -119,13 +137,13 @@ export default function LivePage() {
                 <h2 className="font-poster text-[26px] font-black uppercase leading-none">No live sessions yet</h2>
                 <p className="mt-2 max-w-2xl text-sm text-muted">
                   Pick a stream below and press <span className="text-text">Clip live</span>. Your {plan.name} plan clips up to {slots} stream{slots > 1 ? "s" : ""} at once.
-                  Sessions stop by themselves when the stream ends, or after 8 hours.
+                  Sessions stop by themselves when the stream ends, or after 3 hours.
                 </p>
               </div>
             </div>
           </div>
         ) : (
-          <div className="space-y-4">{sessions.map((j) => <Session key={j.id} j={j} now={now} onStop={() => stop(j)} onPlay={(file) => setPlaying({ job: j.id, file })} />)}</div>
+          <div className="space-y-4">{sessions.map((j) => <Session key={j.id} j={j} now={now} accounts={social.accounts} onAutoOff={() => autoOff(j)} onStop={() => stop(j)} onPlay={(file) => setPlaying({ job: j.id, file })} />)}</div>
         )}
       </section>
 
@@ -197,17 +215,18 @@ export default function LivePage() {
         {confirm ? (
           <div className="space-y-4 p-5">
             <p className="text-sm text-muted">
-              We&apos;ll record <span className="font-medium text-text">{confirm.name}</span> on {confirm.platform === "kick" ? "Kick" : "Twitch"} and cut its best moments into Shorts until the stream ends (max 8 hours). You can stop it anytime.
+              We&apos;ll record <span className="font-medium text-text">{confirm.name}</span> on {confirm.platform === "kick" ? "Kick" : "Twitch"} and cut its best moments into Shorts until the stream ends (max 3 hours). You can stop it anytime.
             </p>
             <p className="text-sm text-muted">Reposting someone else&apos;s stream without permission can get your accounts struck.</p>
             <label className="flex cursor-pointer items-start gap-3 text-sm">
               <input type="checkbox" checked={rights} onChange={(e) => setRights(e.target.checked)} className="mt-0.5 size-4 accent-[var(--pink)]" />
               I own this channel or have the streamer&apos;s permission to clip and repost it.
             </label>
+            <AutoPostForm studio={studio} accounts={social.accounts} ready={social.ready} value={auto} onChange={setAuto} tiktok={tiktokPicked} />
             {error ? <p role="alert" className="border border-red/40 bg-red/[0.07] px-3 py-2 text-xs text-red">{error}</p> : null}
             <div className="flex justify-end gap-2 pt-1">
               <button onClick={() => setConfirm(null)} className="h-10 border border-line-strong px-4 text-sm text-muted hover:text-text">Cancel</button>
-              <button onClick={start} disabled={!rights || starting} className={`${PRIMARY} h-10 px-4 text-[17px]`}>
+              <button onClick={start} disabled={!rights || starting || autoBlocked} className={`${PRIMARY} h-10 px-4 text-[17px]`}>
                 {starting ? <Loader2 className="size-4 animate-spin" /> : <Scissors className="size-4" strokeWidth={2.5} />} Start clipping
               </button>
             </div>
@@ -231,7 +250,80 @@ function SectionHead({ title, count, live }: { title: string; count?: number; li
   );
 }
 
-function Session({ j, now, onStop, onPlay }: { j: Job; now: number | null; onStop: () => void; onPlay: (file: string) => void }) {
+function AutoPostForm({ studio, accounts, ready, value, onChange, tiktok }: { studio: boolean; accounts: SocialAccount[]; ready: boolean; value: AutoForm; onChange: (v: AutoForm) => void; tiktok: boolean }) {
+  if (!studio) {
+    return <p className="border border-white/15 bg-white/[0.03] px-3 py-2 text-xs text-muted"><Send className="mr-1 inline size-3" /> Want the best clips posted for you while the stream runs? <Link href="/dashboard/billing" className="text-text underline underline-offset-2">Auto-post is on Studio.</Link></p>;
+  }
+  const set = (p: Partial<AutoForm>) => onChange({ ...value, ...p });
+  const usable = accounts.filter((a) => a.active);
+  return (
+    <div className={`border px-3 py-3 ${value.on ? "border-pink/60 bg-pink/[0.04]" : "border-white/15"}`}>
+      <label className="flex cursor-pointer items-center gap-3 text-sm">
+        <input type="checkbox" checked={value.on} onChange={(e) => set({ on: e.target.checked })} className="size-4 accent-[var(--pink)]" />
+        <span className="font-medium">Auto-post the best clips</span>
+        <span className="text-xs text-subtle">while the stream runs</span>
+      </label>
+      {value.on ? (
+        !ready ? <p className="mt-3 text-xs text-subtle">Loading your accounts…</p>
+        : !usable.length ? <p className="mt-3 text-xs text-muted">No accounts connected yet. <Link href="/dashboard/integrations" className="text-text underline underline-offset-2">Connect one</Link> first.</p>
+        : (
+          <div className="mt-3 space-y-3">
+            <ul className="grid gap-1.5 sm:grid-cols-2">
+              {usable.map((a) => {
+                const on = value.accounts.includes(a.id), m = PLATFORM_META[a.platform];
+                return (
+                  <li key={a.id}>
+                    <label className={`flex cursor-pointer items-center gap-2 border px-2 py-1.5 text-xs ${on ? "border-pink" : "border-line"}`}>
+                      <input type="checkbox" checked={on} onChange={() => set({ accounts: on ? value.accounts.filter((x) => x !== a.id) : [...value.accounts, a.id] })} className="size-3.5 accent-[var(--pink)]" />
+                      <span className="grid size-5 shrink-0 place-items-center text-[10px] font-bold text-white" style={{ background: m.color }}>{m.letter}</span>
+                      <span className="truncate">{a.displayName || a.username}</span>
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="text-xs text-subtle">Post clips scoring
+                <select value={value.minScore} onChange={(e) => set({ minScore: Number(e.target.value) })} className="mt-1 h-9 w-full border border-white/20 bg-bg px-2 text-sm text-text outline-none focus:border-pink">
+                  {SCORES.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
+                </select>
+              </label>
+              <label className="text-xs text-subtle">At most
+                <select value={value.gapMin} onChange={(e) => set({ gapMin: Number(e.target.value) })} className="mt-1 h-9 w-full border border-white/20 bg-bg px-2 text-sm text-text outline-none focus:border-pink">
+                  {GAPS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
+                </select>
+              </label>
+            </div>
+            {tiktok ? (
+              <label className="flex cursor-pointer items-start gap-2 text-xs text-muted">
+                <input type="checkbox" checked={value.consent} onChange={(e) => set({ consent: e.target.checked })} className="mt-0.5 size-3.5 accent-[var(--pink)]" />
+                <span>I agree to TikTok&apos;s <a href="https://www.tiktok.com/legal/page/global/music-usage-confirmation/en" target="_blank" rel="noreferrer" className="underline underline-offset-2">Music Usage Confirmation</a> for these posts. They post publicly.</span>
+              </label>
+            ) : null}
+            <p className="text-[11px] text-subtle">Each post uses the clip&apos;s title plus #GTA6 hashtags. Posting less often keeps your accounts safe from spam limits.</p>
+          </div>
+        )
+      ) : null}
+    </div>
+  );
+}
+
+function AutoPostLine({ j, accounts, onOff }: { j: Job; accounts: SocialAccount[]; onOff: () => void }) {
+  const a = j.autopost;
+  const last = j.autopostLast;
+  if (!a && !last) return null;
+  const names = a ? a.accounts.map((id) => accounts.find((x) => x.id === id)?.displayName).filter(Boolean) : [];
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line pt-3 text-xs">
+      <span className={`inline-flex items-center gap-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wider ${a ? "text-pink" : "text-subtle"}`}><Send className="size-3" /> Auto-post {a ? "on" : "off"}</span>
+      {a ? <span className="text-muted">{names.length ? names.join(", ") : `${a.accounts.length} account${a.accounts.length > 1 ? "s" : ""}`} · score {(a.minScore * 10).toFixed(1)}+ · {GAPS.find((g) => g.v === a.gapMin)?.label ?? `every ${a.gapMin} min`}</span> : null}
+      {last ? <span className={last.ok ? "text-green" : "text-red"}>{last.ok ? `Last sent: ${last.title}` : `Last post failed: ${last.error ?? "unknown error"}`}</span> : null}
+      {a && j.status === "recording" ? <button onClick={onOff} className="ml-auto font-mono text-[10.5px] font-bold uppercase tracking-wider text-muted hover:text-red">Turn off</button> : null}
+    </div>
+  );
+}
+
+function Session({ j, now, accounts, onAutoOff, onStop, onPlay }: { j: Job; now: number | null; accounts: SocialAccount[]; onAutoOff: () => void; onStop: () => void; onPlay: (file: string) => void }) {
   const recording = j.status === "recording";
   const chunks = j.chunks ?? 0, processed = j.processed ?? 0;
   const finishing = !recording && processed < chunks;
@@ -262,6 +354,7 @@ function Session({ j, now, onStop, onPlay }: { j: Job; now: number | null; onSto
           </button>
         ) : null}
       </div>
+      <AutoPostLine j={j} accounts={accounts} onOff={onAutoOff} />
       {j.clips.length ? <div className="mt-4"><ClipGrid jobId={j.id} clips={[...j.clips].reverse()} onPlay={onPlay} /></div> : null}
     </article>
   );

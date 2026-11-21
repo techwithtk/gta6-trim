@@ -253,3 +253,9 @@ button, a, select { cursor: pointer; }
   box-shadow: 6px 6px 0 var(--ink);
 }
 .paper-chrome h1 { font-family: var(--font-poster); font-weight: 900; text-transform: uppercase; letter-spacing: -0.01em; line-height: 0.9; }
+
+/* Clip editor: two range inputs stacked on one track; only the handles take clicks. */
+.trim-thumb::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; pointer-events: auto; width: 14px; height: 40px; background: var(--pink); border: 2px solid #000; cursor: ew-resize; }
+.trim-thumb::-moz-range-thumb { pointer-events: auto; width: 12px; height: 38px; background: var(--pink); border: 2px solid #000; border-radius: 0; cursor: ew-resize; }
+.trim-thumb::-webkit-slider-runnable-track { height: 40px; background: transparent; }
+.trim-thumb::-moz-range-track { background: transparent; }

@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Check, Download, HardDriveUpload, Loader2, Play, Send, X } from "lucide-react";
+import { Check, Download, HardDriveUpload, Loader2, Play, Scissors, Send, X } from "lucide-react";
 import type { Clip } from "@/lib/jobs";
 import { usePlan } from "@/lib/account";
 import { postFor, postLabel, useSocial } from "@/lib/social";
 import { PostModal } from "@/components/PostModal";
 import { saveToDrive, useDrive } from "@/lib/drive";
+import { ClipEditor } from "@/components/ClipEditor";
 
 const fmtAt = (s: number) => {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
@@ -19,6 +20,7 @@ export function ClipGrid({ jobId, clips, onPlay }: { jobId: string; clips: Clip[
   const postable = usePlan().limits.autopost;
   const social = useSocial(postable);
   const [target, setTarget] = useState<Clip | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
   const drive = useDrive();
   const [saved, setSaved] = useState<Record<string, { state: "saving" | "done" | "error"; link?: string; error?: string }>>({});
   const toDrive = async (files: string[]) => {
@@ -46,17 +48,24 @@ export function ClipGrid({ jobId, clips, onPlay }: { jobId: string; clips: Clip[
         <li key={c.file} className="min-w-0">
           <button onClick={() => onPlay(c.file)} className="group relative block aspect-[9/16] w-full overflow-hidden border border-line bg-black transition-colors duration-150 hover:border-pink" aria-label={`Play ${c.title}`}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={`/api/import/${jobId}/${c.thumb}`} alt="" className="size-full object-cover transition-transform duration-200 group-hover:scale-105" />
+            <img src={`/api/import/${jobId}/${c.thumb}${c.v ? `?v=${c.v}` : ""}`} alt="" className="size-full object-cover transition-transform duration-200 group-hover:scale-105" />
+            {c.editing ? <span className="absolute inset-0 grid place-items-center bg-black/70"><span className="flex flex-col items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-wider"><Loader2 className="size-5 animate-spin text-pink" /> Re-rendering</span></span> : null}
             <span className="absolute inset-0 grid place-items-center bg-black/30 opacity-0 transition-opacity duration-150 group-hover:opacity-100"><Play className="size-8 fill-white text-white" /></span>
             <span className="num absolute left-1.5 top-1.5 bg-pink px-1.5 text-[10.5px] font-bold text-black">★ {(c.score * 10).toFixed(1)}</span>
             {typeof c.at === "number" ? <span className="num absolute right-1.5 top-1.5 bg-black/75 px-1 text-[10px]">at {fmtAt(c.at)}</span> : null}
             <span className="num absolute bottom-1.5 right-1.5 bg-black/75 px-1 text-[10.5px]">0:{String(c.length).padStart(2, "0")}</span>
           </button>
           <p className="mt-1.5 line-clamp-2 text-[12px] leading-snug text-muted" title={c.reason}>{c.title}</p>
+          {c.editError ? <p className="mt-0.5 text-[10.5px] text-red">{c.editError}</p> : null}
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
             <a href={`/api/import/${jobId}/${c.file}?download=1`} className="inline-flex items-center gap-1 font-mono text-[10.5px] font-semibold uppercase tracking-wider text-text underline-offset-2 hover:text-pink hover:underline">
               <Download className="size-3" /> Download
             </a>
+            {c.src ? (
+              <button onClick={() => setEditing(c.file)} disabled={c.editing} className="inline-flex items-center gap-1 font-mono text-[10.5px] font-semibold uppercase tracking-wider text-text underline-offset-2 hover:text-pink hover:underline disabled:opacity-40">
+                <Scissors className="size-3" /> Edit
+              </button>
+            ) : null}
             {drive.connected ? <DriveButton s={saved[c.file]} onSave={() => toDrive([c.file])} /> : null}
             {postable ? (
               <button onClick={() => setTarget(c)} className="inline-flex items-center gap-1 font-mono text-[10.5px] font-semibold uppercase tracking-wider text-pink underline-offset-2 hover:underline">
@@ -68,6 +77,7 @@ export function ClipGrid({ jobId, clips, onPlay }: { jobId: string; clips: Clip[
         </li>
       ))}
     </ul>
+    <ClipEditor target={editing ? { jobId, file: editing } : null} onClose={() => setEditing(null)} />
     {postable ? <PostModal target={target ? { jobId, clip: target } : null} accounts={social.accounts} posts={social.posts} onClose={() => setTarget(null)} /> : null}
     </>
   );

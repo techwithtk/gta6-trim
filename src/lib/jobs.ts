@@ -3,7 +3,14 @@
 import { useSyncExternalStore } from "react";
 
 /** One clipping job (a YouTube link or an uploaded file) as the worker reports it. */
-export type Clip = { file: string; thumb: string; title: string; reason: string; score: number; length: number; at?: number };
+export type Clip = {
+  file: string; thumb: string; title: string; reason: string; score: number; length: number; at?: number;
+  hook?: string;
+  src?: { offset: number; dur: number }; // present = editable in the clip editor
+  editing?: boolean; editAt?: number; editError?: string | null; edited?: boolean;
+  v?: number; // bumps on every re-render (cache-busts the video and thumbnail)
+};
+export type Autopost = { accounts: string[]; minScore: number; gapMin: number; consent: boolean };
 export type Job = {
   id: string;
   vid: string;
@@ -18,6 +25,8 @@ export type Job = {
   processed?: number;
   stop?: boolean;
   endedAt?: number;
+  autopost?: Autopost | null;
+  autopostLast?: { file: string; title: string; at: number; ok: boolean; error?: string | null };
   step: number;
   steps: string[];
   error?: string;
@@ -36,6 +45,7 @@ const emit = () => listeners.forEach((l) => l());
 /** How soon to poll again: fast while a video is processing, steady during live sessions, slow when idle. */
 const nextPollMs = () =>
   state.jobs.some((j) => j.status === "queued" || j.status === "running") ? 4000
+  : state.jobs.some((j) => j.clips?.some((c) => c.editing)) ? 5000
   : state.jobs.some((j) => j.status === "recording" || (j.kind === "live" && (j.processed ?? 0) < (j.chunks ?? 0))) ? 15000
   : 30000;
 
