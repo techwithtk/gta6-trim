@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Scissors, Radio, Plug, CreditCard, Send, Film, Moon, Sun } from "lucide-react";
+import { Scissors, Radio, Plug, CreditCard, Send, Film, Moon, Sun, Palette } from "lucide-react";
 import { setTheme, useTheme } from "@/lib/theme";
 import { motion, MotionConfig } from "motion/react";
 import { Ambient, EASE_OUT, SPRING } from "@/components/motion";
@@ -16,6 +16,7 @@ const NAV = [
   { href: "/dashboard/live", label: "Live clipping", icon: Radio, short: "Live" },
   { href: "/dashboard/clips", label: "My clips", icon: Film, short: "Clips" },
   { href: "/dashboard/posted", label: "Posted", icon: Send, short: "Posted" },
+  { href: "/dashboard/brand", label: "Brand kit", icon: Palette, short: "Brand" },
   { href: "/dashboard/integrations", label: "Integrations", icon: Plug, short: "Connect" },
   { href: "/dashboard/billing", label: "Plan & billing", icon: CreditCard, short: "Plan" },
 ];
@@ -136,7 +137,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Bottom nav (mobile) */}
-        <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden" aria-label="Main">
+        <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-7 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden" aria-label="Main">
           {NAV.map(({ href, short, icon: Icon }) => {
             const active = isActive(href);
             return (

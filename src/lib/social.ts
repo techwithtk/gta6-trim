@@ -10,7 +10,7 @@ export type SocialPost = {
   externalId?: string;
   createdAt?: string;
   scheduledFor?: string;
-  platforms: { platform: string; accountId?: string; status: string; url?: string; error?: string }[];
+  platforms: { platform: string; accountId?: string; postId?: string; status: string; url?: string; error?: string }[];
 };
 
 export const PLATFORM_META: Record<SocialPlatform, { name: string; color: string; letter: string; note: string }> = {
@@ -20,8 +20,9 @@ export const PLATFORM_META: Record<SocialPlatform, { name: string; color: string
   facebook: { name: "Facebook Pages", color: "#1877f2", letter: "F", note: "Posts as Reels to a Page you manage" },
 };
 
-type State = { ready: boolean; accounts: SocialAccount[]; perPlatform: number; posts: SocialPost[]; error: string | null };
-let state: State = { ready: false, accounts: [], perPlatform: 0, posts: [], error: null };
+export type PostStats = { views: number; likes: number; comments: number; shares: number; at?: string };
+type State = { ready: boolean; accounts: SocialAccount[]; perPlatform: number; posts: SocialPost[]; stats: Record<string, PostStats>; statsOff: boolean; error: string | null };
+let state: State = { ready: false, accounts: [], perPlatform: 0, posts: [], stats: {}, statsOff: false, error: null };
 const listeners = new Set<() => void>();
 let started = false;
 let timer: ReturnType<typeof setTimeout> | null = null;
@@ -47,6 +48,33 @@ export async function refreshPosts() {
   const busy = state.posts.some((p) => ["publishing", "pending", "processing"].includes(p.status));
   timer = setTimeout(refreshPosts, busy ? 8000 : 60000);
 }
+
+let statsAt = 0;
+/** Views/likes/comments per published post. Platforms update these about once a day, so fetch at most every 10 minutes. */
+export async function refreshStats(force = false) {
+  if (!force && Date.now() - statsAt < 600_000) return;
+  statsAt = Date.now();
+  try {
+    const r = await fetch("/api/social/stats", { cache: "no-store" });
+    if (r.ok) { const d = await r.json(); set({ stats: d.stats ?? {}, statsOff: !!d.unavailable }); }
+  } catch { /* keep the last numbers */ }
+}
+
+/** Fresh numbers for one post right now. Returns an error message, or null when it worked. */
+export async function refreshOneStat(postId: string, platform: string): Promise<string | null> {
+  try {
+    const r = await fetch("/api/social/stats", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ postId, platform }) });
+    const d = await r.json();
+    if (!r.ok) return d.error ?? "Couldn't refresh.";
+    if (d.stats) set({ stats: { ...state.stats, [d.key]: d.stats } });
+    return null;
+  } catch { return "Couldn't refresh."; }
+}
+
+export const statFor = (stats: Record<string, PostStats>, postId?: string, platform?: string) => (postId && platform ? stats[`${postId}~${platform}`] : undefined);
+
+/** 1234 → "1.2K". */
+export const compact = (n: number) => new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(n);
 
 export function addPost(p: SocialPost) {
   set({ posts: [p, ...state.posts.filter((x) => x.id !== p.id)] });

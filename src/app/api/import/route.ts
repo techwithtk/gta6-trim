@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { limitsFor, requirePlan, worker } from "@/lib/worker";
+import { limitsFor, brandCapsFor, requirePlan, worker } from "@/lib/worker";
 
 type Job = { createdAt: number; status?: string; kind?: string };
 /** Videos that count toward the monthly limit: started this month, not failed, not live sessions. */
@@ -39,6 +39,7 @@ export async function POST(req: NextRequest) {
         uid: r.s.uid,
         count: Math.min(20, Math.max(3, Number(body.count) || 6)),
         maxMinutes: limits.ytMaxMinutes,
+        brandCaps: brandCapsFor(r.s.plan),
       }),
     });
     return NextResponse.json(await res.json(), { status: res.status });

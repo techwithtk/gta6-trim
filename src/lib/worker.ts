@@ -29,3 +29,6 @@ export async function requirePlan(req: NextRequest): Promise<{ s: Session & { pl
 }
 
 export const limitsFor = (plan: NonNullable<Session["plan"]>) => planById(plan).limits;
+
+/** What the plan unlocks in the brand kit; sent with every job so a downgrade takes effect on the next clip. */
+export const brandCapsFor = (plan: NonNullable<Session["plan"]>) => ({ styles: planById(plan).limits.captionStyles, custom: plan !== "starter" });

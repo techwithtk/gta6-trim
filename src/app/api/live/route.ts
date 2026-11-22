@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { limitsFor, requirePlan, worker } from "@/lib/worker";
+import { limitsFor, brandCapsFor, requirePlan, worker } from "@/lib/worker";
 import { listAccounts, socialConfigured } from "@/lib/bundle";
 
 type AutopostIn = { accounts?: string[]; minScore?: number; gapMin?: number; consent?: boolean };
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   try {
     const res = await worker("/live", {
       method: "POST",
-      body: JSON.stringify({ uid: r.s.uid, login: body.login, platform: body.platform === "kick" ? "kick" : "twitch", maxLive: limits.liveSessions, autopost }),
+      body: JSON.stringify({ uid: r.s.uid, login: body.login, platform: body.platform === "kick" ? "kick" : "twitch", maxLive: limits.liveSessions, autopost, brandCaps: brandCapsFor(r.s.plan) }),
       signal: AbortSignal.timeout(120_000),
     });
     const d = await res.json();

@@ -115,7 +115,7 @@ export type PostResult = {
   externalId?: string; // "<jobId>/<file>"
   createdAt?: string;
   scheduledFor?: string;
-  platforms: { platform: string; accountId?: string; status: string; url?: string; error?: string }[];
+  platforms: { platform: string; accountId?: string; postId?: string; status: string; url?: string; error?: string }[];
 };
 
 type RawPost = {
@@ -140,7 +140,7 @@ function rollup(parts: RawPost[]): PostResult {
       const err = p.errors?.[t] ?? (p.status === "ERROR" ? p.error || "Posting failed." : undefined);
       const url = p.externalData?.[t]?.permalink ?? undefined;
       const st = err ? "failed" : url || p.status === "POSTED" ? "published" : p.status === "SCHEDULED" ? "scheduled" : "publishing";
-      return { platform: PLATFORM_OF[t], accountId: accountId(p.teamId, t), status: st, url, error: err ?? undefined };
+      return { platform: PLATFORM_OF[t], accountId: accountId(p.teamId, t), postId: p.id, status: st, url, error: err ?? undefined };
     }),
   );
   const s = platforms.map((x) => x.status);
@@ -201,4 +201,47 @@ export async function listPosts(uid: string): Promise<PostResult[]> {
   const groups = new Map<string, RawPost[]>();
   for (const p of all) groups.set(p.referenceKey!, [...(groups.get(p.referenceKey!) ?? []), p]);
   return [...groups.values()].map(rollup).sort((a, z) => (z.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+}
+
+/* ------------------------------------------------------------------ analytics */
+
+export type PostStats = { views: number; likes: number; comments: number; shares: number; at?: string };
+type RawStat = { views?: number | null; impressions?: number | null; likes?: number | null; comments?: number | null; shares?: number | null; createdAt?: string | null };
+
+const pick = (items: RawStat[] | undefined): PostStats | null => {
+  const last = [...(items ?? [])].sort((a, z) => (z.createdAt ?? "").localeCompare(a.createdAt ?? ""))[0];
+  if (!last) return null;
+  return { views: last.views || last.impressions || 0, likes: last.likes ?? 0, comments: last.comments ?? 0, shares: last.shares ?? 0, at: last.createdAt ?? undefined };
+};
+export const statKey = (postId: string, platform: string) => `${postId}~${platform}`;
+
+/** Latest views/likes/comments/shares for every published part of the customer's posts, keyed "<postId>~<platform>". */
+export async function postStats(posts: PostResult[]): Promise<Record<string, PostStats>> {
+  const byType = new Map<string, string[]>();
+  for (const p of posts) for (const x of p.platforms) {
+    if (x.status !== "published" || !x.postId) continue;
+    const t = TYPE[x.platform as SocialPlatform];
+    if (t) byType.set(t, [...new Set([...(byType.get(t) ?? []), x.postId])]);
+  }
+  const out: Record<string, PostStats> = {};
+  await Promise.all([...byType].flatMap(([type, ids]) => {
+    const chunks: string[][] = [];
+    for (let i = 0; i < ids.length; i += 20) chunks.push(ids.slice(i, i + 20));
+    return chunks.map(async (chunk) => {
+      const q = new URLSearchParams({ platformType: type, limit: "20" });
+      for (const id of chunk) q.append("postIds", id);
+      const d = await b<{ results?: { postId: string; items?: RawStat[] }[] }>(`/analytics/post/bulk?${q}`);
+      for (const r of d.results ?? []) {
+        const s = pick(r.items);
+        if (s) out[statKey(r.postId, PLATFORM_OF[type])] = s;
+      }
+    });
+  }));
+  return out;
+}
+
+/** Ask the platform for fresh numbers now (bundle.social allows 6 per post per day). */
+export async function refreshPostStats(postId: string, platform: SocialPlatform): Promise<PostStats | null> {
+  const r = await b<RawStat>("/analytics/post/force", { method: "POST", body: JSON.stringify({ postId, platformType: TYPE[platform] }) });
+  return pick([r]);
 }
