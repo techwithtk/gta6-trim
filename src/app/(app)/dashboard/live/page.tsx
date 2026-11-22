@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Eye, Film, Loader2, Radio, Scissors, Send, Square, AlertCircle, Check } from "lucide-react";
+import { Eye, Film, Loader2, Radio, Scissors, Send, Square, AlertCircle, Check, BellRing, X, Zap } from "lucide-react";
 import { usePlan } from "@/lib/account";
 import { addJob, refreshJobs, useJobs, type Job } from "@/lib/jobs";
 import { Modal } from "@/components/Modal";
@@ -16,6 +16,7 @@ type AutoForm = { on: boolean; accounts: string[]; minScore: number; gapMin: num
 
 type LiveStream = { id: string; login: string; name: string; title: string; viewers: number; startedAt: string; thumbnail: string; url: string };
 type Platform = "twitch" | "kick";
+type Watch = { platform: Platform; login: string; autopost?: { accounts: string[] } | null; createdAt: number; lastStartAt: number; lastJob: string; lastError: string };
 type Result = { source: Platform; streams: LiveStream[] } | { source: "sample"; reason: string };
 const PLATFORMS: { id: Platform; label: string; color: string }[] = [
   { id: "twitch", label: "Twitch", color: "#9146ff" },
@@ -36,7 +37,11 @@ export default function LivePage() {
   const { jobs, ready, offline } = useJobs();
   const [lists, setLists] = useState<Record<Platform, Result | null>>({ twitch: null, kick: null });
   const [platform, setPlatform] = useState<Platform>("twitch");
-  const [confirm, setConfirm] = useState<{ login: string; name: string; platform: Platform } | null>(null);
+  const [confirm, setConfirm] = useState<{ login: string; name: string; platform: Platform; mode: "start" | "watch" } | null>(null);
+  const [alsoWatch, setAlsoWatch] = useState(false);
+  const [watches, setWatches] = useState<Watch[] | null>(null);
+  const [watchInput, setWatchInput] = useState("");
+  const [watchPlatform, setWatchPlatform] = useState<Platform>("twitch");
   const [rights, setRights] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,6 +60,12 @@ export default function LivePage() {
     const t = setInterval(load, 60000);
     return () => { live = false; clearInterval(t); };
   }, []);
+  const loadWatches = () => fetch("/api/watch", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((d) => d && setWatches(d.watches ?? [])).catch(() => {});
+  useEffect(() => {
+    loadWatches();
+    const t = setInterval(loadWatches, 60000);
+    return () => clearInterval(t);
+  }, []);
   useEffect(() => {
     const tick = () => setNow(Date.now());
     const first = setTimeout(tick, 0);
@@ -71,22 +82,40 @@ export default function LivePage() {
   const streams = data && data.source !== "sample" ? [...data.streams].sort((a, b) => b.viewers - a.viewers) : [];
   const pName = platform === "kick" ? "Kick" : "Twitch";
 
-  const open = (login: string, name: string, p: Platform = platform) => {
-    setError(null); setRights(false);
+  const open = (login: string, name: string, p: Platform = platform, mode: "start" | "watch" = "start") => {
+    setError(null); setRights(false); setAlsoWatch(false);
     setAuto((a) => ({ ...a, on: false, consent: false, accounts: social.accounts.filter((x) => x.active).map((x) => x.id) }));
-    setConfirm({ login, name, platform: /kick\.com\//i.test(login) ? "kick" : /twitch\.tv\//i.test(login) ? "twitch" : p });
+    setConfirm({ login, name, mode, platform: /kick\.com\//i.test(login) ? "kick" : /twitch\.tv\//i.test(login) ? "twitch" : p });
+  };
+  const autopostBody = () => (studio && auto.on && auto.accounts.length ? { accounts: auto.accounts, minScore: auto.minScore, gapMin: auto.gapMin, consent: auto.consent } : undefined);
+  const saveWatch = async (c: { login: string; platform: Platform }) => {
+    const r = await fetch("/api/watch", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ login: c.login, platform: c.platform, rights, autopost: autopostBody() }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error ?? "Couldn't save auto-start.");
+    await loadWatches();
+  };
+  const removeWatch = async (w: Watch) => {
+    setWatches((ws) => ws?.filter((x) => !(x.platform === w.platform && x.login === w.login)) ?? ws);
+    await fetch(`/api/watch?platform=${w.platform}&login=${encodeURIComponent(w.login)}`, { method: "DELETE" }).catch(() => {});
+    loadWatches();
   };
   const start = async () => {
     if (!confirm || !rights) return;
     setStarting(true); setError(null);
     try {
+      if (confirm.mode === "watch") {
+        await saveWatch(confirm);
+        setConfirm(null); setWatchInput("");
+        return;
+      }
       const r = await fetch("/api/live", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
         login: confirm.login, platform: confirm.platform, rights,
-        autopost: studio && auto.on && auto.accounts.length ? { accounts: auto.accounts, minScore: auto.minScore, gapMin: auto.gapMin, consent: auto.consent } : undefined,
+        autopost: autopostBody(),
       }) });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error ?? "Couldn't start.");
       addJob(d);
+      if (alsoWatch) await saveWatch(confirm).catch(() => {});
       setConfirm(null); setManual("");
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {
@@ -145,6 +174,51 @@ export default function LivePage() {
           </div>
         ) : (
           <div className="space-y-4">{sessions.map((j) => <Session key={j.id} j={j} now={now} accounts={social.accounts} onAutoOff={() => autoOff(j)} onStop={() => stop(j)} onPlay={(file) => setPlaying({ job: j.id, file })} />)}</div>
+        )}
+      </section>
+
+      {/* Auto-start */}
+      <section className="mb-10" aria-label="Auto-start">
+        <SectionHead title="Auto-start" count={watches?.length} />
+        <p className="mb-4 max-w-2xl text-sm text-muted">
+          Save the streamers you clip. We check every 2 minutes, and the moment one goes live, clipping starts by itself, with auto-post if you set it. Each auto-started session uses one of your {slots} live slot{slots > 1 ? "s" : ""}.
+        </p>
+        {watches && watches.length ? (
+          <ul className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {watches.map((w) => {
+              const on = clippingLogins.has(`${w.platform}:${w.login}`);
+              return (
+                <li key={`${w.platform}:${w.login}`} className={`flex items-start gap-3 border bg-surface p-3 ${on ? "border-pink/60" : "border-line"}`}>
+                  <span className="mt-1.5 size-2 shrink-0" style={{ background: w.platform === "kick" ? "#53fc18" : "#a970ff" }} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2">
+                      <span className="truncate text-sm font-medium">{w.login}</span>
+                      <span className="font-mono text-[10px] uppercase text-subtle">{w.platform === "kick" ? "Kick" : "Twitch"}</span>
+                      {w.autopost?.accounts?.length ? <span className="inline-flex items-center gap-1 font-mono text-[10px] font-bold uppercase text-pink"><Send className="size-2.5" /> Auto-post</span> : null}
+                    </div>
+                    <p className={`mt-0.5 text-xs ${on ? "text-pink" : w.lastError ? "text-red" : "text-subtle"}`}>
+                      {on ? "Clipping now" : w.lastError ? w.lastError : w.lastStartAt ? `Last auto-started ${new Date(w.lastStartAt * 1000).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}` : "Waiting for them to go live"}
+                    </p>
+                  </div>
+                  <button onClick={() => removeWatch(w)} aria-label={`Stop auto-starting ${w.login}`} title="Remove" className="text-subtle hover:text-red"><X className="size-4" /></button>
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+        {watches && watches.length >= slots ? (
+          <p className="text-xs text-subtle">You&apos;re auto-starting {slots} channel{slots > 1 ? "s" : ""}, your plan&apos;s limit. Remove one to add another{plan.id !== "studio" ? <>, or <Link href="/dashboard/billing" className="underline underline-offset-2">upgrade</Link></> : null}.</p>
+        ) : (
+          <form className="flex flex-wrap gap-2" onSubmit={(e) => { e.preventDefault(); if (watchInput.trim()) open(watchInput.trim(), watchInput.trim(), watchPlatform, "watch"); }}>
+            <select value={watchPlatform} onChange={(e) => setWatchPlatform(e.target.value as Platform)} aria-label="Platform"
+              className="h-9 border border-white/20 bg-bg px-2 font-mono text-[11px] font-bold uppercase tracking-wider text-text outline-none focus:border-pink">
+              <option value="twitch">Twitch</option>
+              <option value="kick">Kick</option>
+            </select>
+            <input value={watchInput} onChange={(e) => setWatchInput(e.target.value)} placeholder="Channel name or link" aria-label="Channel to auto-start"
+              className="h-9 w-full border border-white/20 bg-bg px-3 text-sm outline-none placeholder:text-subtle focus:border-pink sm:w-64" />
+            <button type="submit" disabled={!watchInput.trim()} className={`${PRIMARY} h-9 px-3 text-[15px]`}><BellRing className="size-3.5" strokeWidth={2.5} /> Auto-start</button>
+          </form>
         )}
       </section>
 
@@ -212,23 +286,31 @@ export default function LivePage() {
       {full ? <p className="mt-4 text-xs text-orange">All {slots} of your live slots are in use. Stop a session to start another{plan.id !== "studio" ? <>, or <Link href="/dashboard/billing" className="underline underline-offset-2">upgrade</Link> for more</> : null}.</p> : null}
       <p className="mt-4 text-xs text-subtle">Only clip streams you own or have the streamer&apos;s permission to repost.</p>
 
-      <Modal open={!!confirm} onClose={() => setConfirm(null)} title="Clip this stream live?">
+      <Modal open={!!confirm} onClose={() => setConfirm(null)} title={confirm?.mode === "watch" ? "Auto-start this channel?" : "Clip this stream live?"}>
         {confirm ? (
           <div className="space-y-4 p-5">
             <p className="text-sm text-muted">
-              We&apos;ll record <span className="font-medium text-text">{confirm.name}</span> on {confirm.platform === "kick" ? "Kick" : "Twitch"} and cut its best moments into Shorts until the stream ends (max 3 hours). You can stop it anytime.
+              {confirm.mode === "watch"
+                ? <>Every time <span className="font-medium text-text">{confirm.name}</span> goes live on {confirm.platform === "kick" ? "Kick" : "Twitch"}, we&apos;ll start clipping within about 2 minutes, if you have a free live slot. Each session runs until the stream ends (max 3 hours).</>
+                : <>We&apos;ll record <span className="font-medium text-text">{confirm.name}</span> on {confirm.platform === "kick" ? "Kick" : "Twitch"} and cut its best moments into Shorts until the stream ends (max 3 hours). You can stop it anytime.</>}
             </p>
             <p className="text-sm text-muted">Reposting someone else&apos;s stream without permission can get your accounts struck.</p>
             <label className="flex cursor-pointer items-start gap-3 text-sm">
               <input type="checkbox" checked={rights} onChange={(e) => setRights(e.target.checked)} className="mt-0.5 size-4 accent-[var(--pink)]" />
               I own this channel or have the streamer&apos;s permission to clip and repost it.
             </label>
+            {confirm.mode === "start" && !(watches ?? []).some((w) => w.platform === confirm.platform && w.login === confirm.login.toLowerCase()) && (watches?.length ?? 0) < slots ? (
+              <label className="flex cursor-pointer items-start gap-3 text-sm">
+                <input type="checkbox" checked={alsoWatch} onChange={(e) => setAlsoWatch(e.target.checked)} className="mt-0.5 size-4 accent-[var(--pink)]" />
+                <span><Zap className="mr-1 inline size-3.5 text-pink" />Also auto-start this channel every time it goes live</span>
+              </label>
+            ) : null}
             <AutoPostForm studio={studio} accounts={social.accounts} ready={social.ready} value={auto} onChange={setAuto} tiktok={tiktokPicked} />
             {error ? <p role="alert" className="border border-red/40 bg-red/[0.07] px-3 py-2 text-xs text-red">{error}</p> : null}
             <div className="flex justify-end gap-2 pt-1">
               <button onClick={() => setConfirm(null)} className="h-10 border border-line-strong px-4 text-sm text-muted hover:text-text">Cancel</button>
               <button onClick={start} disabled={!rights || starting || autoBlocked} className={`${PRIMARY} h-10 px-4 text-[17px]`}>
-                {starting ? <Loader2 className="size-4 animate-spin" /> : <Scissors className="size-4" strokeWidth={2.5} />} Start clipping
+                {starting ? <Loader2 className="size-4 animate-spin" /> : confirm.mode === "watch" ? <BellRing className="size-4" strokeWidth={2.5} /> : <Scissors className="size-4" strokeWidth={2.5} />} {confirm.mode === "watch" ? "Save auto-start" : "Start clipping"}
               </button>
             </div>
           </div>
@@ -344,6 +426,7 @@ function Session({ j, now, accounts, onAutoOff, onStop, onPlay }: { j: Job; now:
             <span className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase ${recording ? "bg-pink text-black" : finishing ? "bg-white/10 text-text" : "bg-white/5 text-subtle"}`}>
               {recording ? <span className="size-1.5 animate-pulse rounded-full bg-black" /> : finishing ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />} {status}
             </span>
+            {j.auto ? <span className="inline-flex items-center gap-1 font-mono text-[10px] font-bold uppercase text-subtle"><Zap className="size-3" /> Auto-started</span> : null}
             {now ? <span className="num text-xs text-subtle">{since(j.createdAt * 1000, endMs)}</span> : null}
           </div>
           <p className="mt-0.5 line-clamp-1 text-xs text-subtle">{j.title}</p>

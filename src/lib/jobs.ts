@@ -18,6 +18,7 @@ export type Job = {
   duration: number;
   status: "queued" | "running" | "done" | "error" | "recording" | "ended";
   kind?: "live";
+  auto?: boolean; // live session started by auto-start
   platform?: "twitch" | "kick";
   login?: string;
   channel?: string;
