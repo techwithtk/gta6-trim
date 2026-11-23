@@ -14,6 +14,6 @@ export async function GET(req: NextRequest) {
   if (stale) s = await buildSession(s);
   if (!s) return NextResponse.json({ user: null, plan: null, cycle: null, error: "unverified" }, noStore);
 
-  const res = NextResponse.json({ user: { email: s.email, name: s.name, picture: s.picture ?? null }, plan: s.plan, cycle: s.cycle ?? null, trialEndsAt: s.trialEndsAt ?? null }, noStore);
+  const res = NextResponse.json({ user: { email: s.email, name: s.name, picture: s.picture ?? null }, plan: s.plan, cycle: s.cycle ?? null, trialEndsAt: s.trialEndsAt ?? null, team: s.ws ? { owner: s.wsName ?? "your team" } : null }, noStore);
   return stale ? setSession(res, req, s) : res;
 }

@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   if (!b.jobId || !/^[a-f0-9]{12}$/.test(b.jobId)) return NextResponse.json({ error: "Pick a clip." }, { status: 400 });
   const files = (b.files ?? []).filter((f) => typeof f === "string" && /^(clip_\d{2}|live_\d{3}_\d{2})\.mp4$/.test(f)).slice(0, 30);
   if (!files.length) return NextResponse.json({ error: "Pick a clip." }, { status: 400 });
-  const token = await driveToken(r.s.uid);
+  const token = await driveToken(r.s.self ?? r.s.uid);
   if (!token) return NextResponse.json({ error: "Connect Google Drive first (Integrations page)." }, { status: 409 });
   try {
     const res = await worker("/drive/save", {

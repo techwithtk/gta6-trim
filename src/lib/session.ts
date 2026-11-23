@@ -7,8 +7,9 @@ export const SESSION_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
 export const RECHECK_MS = 6 * 60 * 60 * 1000; // re-ask Dodo about the subscription every 6 hours
 
 /** Re-ask Dodo when the cached plan is old, or a free trial has just ended (it either converted or was cancelled). */
-export const isStale = (s: { checkedAt: number; trialEndsAt?: number }) =>
-  Date.now() - s.checkedAt > RECHECK_MS || (!!s.trialEndsAt && Date.now() > s.trialEndsAt && s.checkedAt < s.trialEndsAt);
+export const isStale = (s: { checkedAt: number; trialEndsAt?: number; ws?: string }) =>
+  Date.now() - s.checkedAt > (s.ws ? 30 * 60 * 1000 : RECHECK_MS) || // team seats are re-checked every 30 min, so a removed member loses access fast
+  (!!s.trialEndsAt && Date.now() > s.trialEndsAt && s.checkedAt < s.trialEndsAt);
 
 export type Session = {
   uid: string; // Clerk user id — the cookie is only valid for this signed-in user
@@ -19,6 +20,9 @@ export type Session = {
   cycle?: "monthly" | "yearly";
   sub?: string; // Dodo subscription id
   trialEndsAt?: number; // ms; set while the subscription is still in its free trial
+  ws?: string; // team member: the Clerk id of the Studio owner whose workspace (and plan) they use
+  wsName?: string; // team member: the owner's name, for display
+  self?: string; // set by requirePlan: the signed-in person's own Clerk id (uid becomes the workspace id)
   checkedAt: number; // when the plan was last confirmed with Dodo
   exp: number; // session expiry (ms)
 };

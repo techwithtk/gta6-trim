@@ -8,6 +8,7 @@ import { Segmented } from "@/components/forms";
 import { EASE_OUT, T } from "@/components/motion";
 import { COMPARISON, MAX_ACCOUNTS_PER_PLATFORM, PLANS, type PlanId } from "@/lib/plans";
 import { useAccount } from "@/lib/account";
+import { TeamSeats } from "@/components/TeamSeats";
 
 export default function BillingPage() {
   const account = useAccount();
@@ -67,6 +68,7 @@ export default function BillingPage() {
         }
       />
 
+      <TeamSeats />
       {msg ? <p role="status" className={`mb-4 rounded-lg border px-3 py-2 text-sm ${msg.ok ? "border-green/30 bg-green/[0.06] text-green" : "border-red/30 bg-red/[0.06] text-red"}`}>{msg.text}</p> : null}
       <div className="grid gap-4 lg:grid-cols-3">
         {PLANS.map((p, i) => {

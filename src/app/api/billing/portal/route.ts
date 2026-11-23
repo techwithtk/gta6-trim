@@ -5,6 +5,7 @@ import { dodo } from "@/lib/dodo";
 /** Opens Dodo's customer portal: update card, download invoices, cancel. */
 export async function POST(req: NextRequest) {
   const s = await readSession(req);
+  if (s?.ws) return Response.json({ error: "Billing is managed by your team owner." }, { status: 403 });
   if (!s?.sub) return Response.json({ error: "No active subscription on this account." }, { status: 400 });
   try {
     const sub = await dodo().subscriptions.retrieve(s.sub);

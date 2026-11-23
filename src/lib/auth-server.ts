@@ -1,7 +1,8 @@
 import "server-only";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth, clerkClient, currentUser } from "@clerk/nextjs/server";
 import { NextResponse, type NextRequest } from "next/server";
 import { findActiveSubscription } from "@/lib/dodo";
+import { planById } from "@/lib/plans";
 import { SESSION_COOKIE, SESSION_MAX_AGE, cookieOptions, decodeSession, encodeSession, type Session } from "@/lib/session";
 
 /**
@@ -38,6 +39,10 @@ export async function buildSession(previous?: Session | null): Promise<Session |
   }
   try {
     const found = await findActiveSubscription(email);
+    if (!found) {
+      const seat = await teamSeat(email).catch(() => null);
+      if (seat) return { ...base, ...seat, checkedAt: Date.now() };
+    }
     return { ...base, plan: found?.plan ?? null, cycle: found?.cycle, sub: found?.sub, trialEndsAt: found?.trialEndsAt, checkedAt: Date.now() };
   } catch (e) {
     // Dodo unreachable: keep the last known plan for the same user rather than locking a paying customer out.
@@ -45,6 +50,24 @@ export async function buildSession(previous?: Session | null): Promise<Session |
     const keep = previous && previous.uid === base.uid ? previous : null;
     return { ...base, plan: keep?.plan ?? null, cycle: keep?.cycle, sub: keep?.sub, trialEndsAt: keep?.trialEndsAt, checkedAt: Date.now() };
   }
+}
+
+/**
+ * Team seats: no subscription of their own, but invited (by this verified email) to a Studio owner's team.
+ * They get the owner's plan and work in the owner's workspace. Checked again whenever the session refreshes.
+ */
+async function teamSeat(email: string): Promise<Pick<Session, "plan" | "cycle" | "trialEndsAt" | "ws" | "wsName"> | null> {
+  const url = (process.env.WORKER_URL ?? "").replace(/\/$/, "");
+  if (!url || !process.env.WORKER_SECRET) return null;
+  const r = await fetch(`${url}/seats?email=${encodeURIComponent(email)}`, { headers: { "x-worker-secret": process.env.WORKER_SECRET }, cache: "no-store", signal: AbortSignal.timeout(15_000) });
+  const owner = r.ok ? ((await r.json()) as { owner?: string | null }).owner : null;
+  if (!owner) return null;
+  const c = await clerkClient();
+  const u = await c.users.getUser(owner);
+  const ownerEmail = (u.emailAddresses.find((e) => e.id === u.primaryEmailAddressId) ?? u.emailAddresses[0])?.emailAddress;
+  const sub = ownerEmail ? await findActiveSubscription(ownerEmail) : null;
+  if (!sub || planById(sub.plan).limits.seats < 2) return null; // owner no longer on a plan with seats
+  return { plan: sub.plan, cycle: sub.cycle, trialEndsAt: sub.trialEndsAt, ws: owner, wsName: u.fullName || u.username || ownerEmail?.split("@")[0] || "your team" };
 }
 
 export async function setSession(res: NextResponse, req: NextRequest, s: Session) {

@@ -6,5 +6,5 @@ import { driveToken } from "@/lib/drive-server";
 export async function GET(req: NextRequest) {
   const r = await requirePlan(req);
   if ("error" in r) return r.error;
-  return NextResponse.json({ connected: !!(await driveToken(r.s.uid)) });
+  return NextResponse.json({ connected: !!(await driveToken(r.s.self ?? r.s.uid)) });
 }

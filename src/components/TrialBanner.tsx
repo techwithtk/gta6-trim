@@ -23,7 +23,7 @@ export function TrialBanner() {
   }, []);
 
   const end = account.trialEndsAt ?? 0;
-  if (!end || !now || now > end) return null;
+  if (!end || !now || now > end || account.team) return null;
 
   const left = end - now;
   const h = Math.floor(left / 3_600_000), m = Math.floor((left % 3_600_000) / 60_000);

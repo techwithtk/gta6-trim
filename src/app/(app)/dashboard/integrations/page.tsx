@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, Check, Info, Loader2, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useUser } from "@clerk/nextjs";
 import { usePlan } from "@/lib/account";
-import { refreshDrive, useDrive } from "@/lib/drive";
+import { refreshDrive, refreshStorage, useDrive, useStorage, type StorageProvider } from "@/lib/drive";
 import { MAX_ACCOUNTS_PER_PLATFORM, type SocialPlatform } from "@/lib/plans";
 import { PLATFORM_META, refreshAccounts, useSocial, type SocialAccount } from "@/lib/social";
 
@@ -175,15 +175,10 @@ function Integrations() {
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
         <GoogleDriveCard />
-        {STORAGE.filter((s) => s.name !== "Google Drive").map((s) => (
-          <div key={s.name} className="flex items-center gap-3 border border-line bg-surface p-4 opacity-70">
-            <Mark letter={s.letter} color={s.color} size={32} />
-            <span className="text-sm">{s.name}</span>
-            <span className="ml-auto border border-white/15 px-1.5 py-px font-mono text-[9.5px] font-bold uppercase tracking-wider text-subtle">Soon</span>
-          </div>
-        ))}
+        <StorageCard provider="dropbox" />
+        <StorageCard provider="onedrive" />
       </div>
-      <p className="mt-3 text-xs text-subtle">Clips go into a &quot;GTA6 Trim&quot; folder in your Drive. We can only see files we save there, never the rest of your Drive.</p>
+      <p className="mt-3 text-xs text-subtle">Clips go into a &quot;GTA6 Trim&quot; folder. Google Drive and Dropbox only let us see the files we save there; we never read the rest of your storage.</p>
     </>
   );
 }
@@ -248,4 +243,61 @@ function friendlyError(code: string, name: string, reason: string | null) {
   if (code.includes("not-enough-permissions")) return `${name} wasn't connected because some permissions were unticked. Connect again and allow everything asked.`;
   if (reason === "facebook-two-factor-required") return "Facebook needs two-factor login turned on for this account. Turn it on, then connect again.";
   return `${name} couldn't connect. Try again.`;
+}
+
+const STORAGE_ERRORS: Record<string, string> = {
+  denied: "wasn't connected: permission was cancelled. Try again and allow access.",
+  expired: "wasn't connected: the sign-in link expired. Try again.",
+  plan: "is on Pro and Studio.",
+  failed: "couldn't connect. Try again in a minute.",
+  unavailable: "isn't available yet.",
+};
+
+/** Dropbox / OneDrive: our own OAuth (tokens stay on our server). Shown as "Soon" until the app keys are set, and as an upgrade on Starter. */
+function StorageCard({ provider }: { provider: StorageProvider }) {
+  const st = useStorage();
+  const s = st[provider];
+  const meta = STORAGE.find((x) => x.name.toLowerCase().replace(" ", "") === provider)!;
+  const [busy, setBusy] = useState(false);
+  const q = useSearchParams();
+  const code = q.get("provider") === provider ? q.get("storage_error") : null;
+  const error = code ? `${meta.name} ${STORAGE_ERRORS[code] ?? STORAGE_ERRORS.failed}` : null;
+  const justConnected = q.get("storage") === provider;
+
+  useEffect(() => { if (justConnected) refreshStorage(); }, [justConnected]);
+
+  const disconnect = async () => {
+    if (!window.confirm(`Disconnect ${meta.name}? Clips already saved stay in your ${meta.name}.`)) return;
+    setBusy(true);
+    await fetch(`/api/storage?provider=${provider}`, { method: "DELETE" }).catch(() => {});
+    await refreshStorage();
+    setBusy(false);
+  };
+
+  return (
+    <div className={`border border-line bg-surface p-4 ${st.ready && !s.available ? "opacity-70" : ""}`}>
+      <div className="flex items-center gap-3">
+        <Mark letter={meta.letter} color={meta.color} size={32} />
+        <span className="text-sm">{meta.name}</span>
+        {!st.ready ? null : !s.available ? (
+          <span className="ml-auto border border-white/15 px-1.5 py-px font-mono text-[9.5px] font-bold uppercase tracking-wider text-subtle">Soon</span>
+        ) : s.connected ? <span className="ml-auto inline-flex items-center gap-1 text-xs text-green"><Check className="size-3" /> Connected</span> : null}
+      </div>
+      {!st.ready ? (
+        <div className="mt-3 h-9 animate-pulse bg-surface-2" />
+      ) : !s.available ? null : !s.allowed ? (
+        <p className="mt-3 text-xs text-muted">On Pro and Studio. <Link href="/dashboard/billing" className="text-text underline underline-offset-2">Upgrade</Link></p>
+      ) : s.connected ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted">
+          <span className="min-w-0 flex-1 truncate">{s.account ? `As ${s.account}. ` : ""}Press <span className="text-text">{meta.name}</span> under any clip.</span>
+          <button onClick={disconnect} disabled={busy} className="inline-flex items-center gap-1 text-subtle hover:text-red disabled:opacity-40"><Trash2 className="size-3" /> Disconnect</button>
+        </div>
+      ) : (
+        <a href={`/api/drive/${provider}/connect`} onClick={() => setBusy(true)} className="mt-3 inline-flex h-9 items-center gap-1.5 border border-white/25 px-3 text-sm transition-colors duration-150 hover:border-pink hover:text-pink">
+          {busy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />} Connect {meta.name}
+        </a>
+      )}
+      {error ? <p className="mt-2 text-xs text-red">{error}</p> : null}
+    </div>
+  );
 }

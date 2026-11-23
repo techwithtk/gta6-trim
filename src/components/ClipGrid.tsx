@@ -7,7 +7,7 @@ import type { Clip } from "@/lib/jobs";
 import { usePlan } from "@/lib/account";
 import { postFor, postLabel, useSocial } from "@/lib/social";
 import { PostModal } from "@/components/PostModal";
-import { saveToDrive, useDrive } from "@/lib/drive";
+import { saveToDrive, saveToStorage, STORAGE_LABEL, useDrive, useStorage, type StorageProvider } from "@/lib/drive";
 import { ClipEditor } from "@/components/ClipEditor";
 import { PostTextModal } from "@/components/PostTextModal";
 
@@ -38,6 +38,19 @@ export function ClipGrid({ jobId, clips, onPlay }: { jobId: string; clips: Clip[
     }
   };
   const unsaved = clips.filter((c) => !saved[c.file]).map((c) => c.file);
+  // Dropbox / OneDrive: same per-clip button, keyed "<provider>:<file>".
+  const storage = useStorage();
+  const clouds = (["dropbox", "onedrive"] as StorageProvider[]).filter((p) => storage[p].connected && storage[p].allowed && storage[p].available);
+  const toCloud = async (p: StorageProvider, file: string) => {
+    const k = `${p}:${file}`;
+    setSaved((s) => ({ ...s, [k]: { state: "saving" } }));
+    try {
+      const [res] = await saveToStorage(p, jobId, [file]);
+      setSaved((s) => ({ ...s, [k]: res?.error ? { state: "error", error: res.error } : { state: "done", link: res?.link } }));
+    } catch (e) {
+      setSaved((s) => ({ ...s, [k]: { state: "error", error: e instanceof Error ? e.message : `Couldn't save to ${STORAGE_LABEL[p]}.` } }));
+    }
+  };
   return (
     <>
     {drive.connected && clips.length > 1 && unsaved.length ? (
@@ -76,6 +89,7 @@ export function ClipGrid({ jobId, clips, onPlay }: { jobId: string; clips: Clip[
               </button>
             ) : null}
             {drive.connected ? <DriveButton s={saved[c.file]} onSave={() => toDrive([c.file])} /> : null}
+            {clouds.map((p) => <DriveButton key={p} label={STORAGE_LABEL[p]} s={saved[`${p}:${c.file}`]} onSave={() => toCloud(p, c.file)} />)}
             {postable ? (
               <button onClick={() => setTarget(c)} className="inline-flex items-center gap-1 font-mono text-[10.5px] font-semibold uppercase tracking-wider text-pink underline-offset-2 hover:underline">
                 <Send className="size-3" /> Post
@@ -93,13 +107,13 @@ export function ClipGrid({ jobId, clips, onPlay }: { jobId: string; clips: Clip[
   );
 }
 
-function DriveButton({ s, onSave }: { s?: { state: "saving" | "done" | "error"; link?: string; error?: string }; onSave: () => void }) {
+function DriveButton({ s, onSave, label = "Drive" }: { s?: { state: "saving" | "done" | "error"; link?: string; error?: string }; onSave: () => void; label?: string }) {
   const cls = "inline-flex items-center gap-1 font-mono text-[10.5px] font-semibold uppercase tracking-wider";
   if (s?.state === "saving") return <span className={`${cls} text-subtle`}><Loader2 className="size-3 animate-spin" /> Saving</span>;
-  if (s?.state === "done") return s.link ? <a href={s.link} target="_blank" rel="noreferrer" className={`${cls} text-green hover:underline`}><Check className="size-3" /> In Drive</a> : <span className={`${cls} text-green`}><Check className="size-3" /> In Drive</span>;
+  if (s?.state === "done") return s.link ? <a href={s.link} target="_blank" rel="noreferrer" className={`${cls} text-green hover:underline`}><Check className="size-3" /> In {label}</a> : <span className={`${cls} text-green`}><Check className="size-3" /> In {label}</span>;
   return (
     <button onClick={onSave} title={s?.error} className={`${cls} ${s?.state === "error" ? "text-red" : "text-text"} underline-offset-2 hover:text-pink hover:underline`}>
-      <HardDriveUpload className="size-3" /> {s?.state === "error" ? "Retry Drive" : "Drive"}
+      <HardDriveUpload className="size-3" /> {s?.state === "error" ? `Retry ${label}` : label}
     </button>
   );
 }

@@ -25,7 +25,8 @@ export async function requirePlan(req: NextRequest): Promise<{ s: Session & { pl
   if (!s) return { error: NextResponse.json({ error: "Sign in first." }, { status: 401 }) };
   if (!s.plan) return { error: NextResponse.json({ error: "Pick a plan to import videos." }, { status: 402 }) };
   if (!workerConfigured()) return { error: NextResponse.json({ error: "The clipping engine is offline right now. Try again soon." }, { status: 503 }) };
-  return { s: s as Session & { plan: NonNullable<Session["plan"]> } };
+  // Team members work in the owner's workspace: every job, account and setting is keyed by the workspace id.
+  return { s: { ...(s as Session & { plan: NonNullable<Session["plan"]> }), uid: s.ws ?? s.uid, self: s.uid } };
 }
 
 export const limitsFor = (plan: NonNullable<Session["plan"]>) => planById(plan).limits;
