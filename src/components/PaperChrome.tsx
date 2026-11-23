@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { GUIDES } from "@/lib/guides";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowUpRight, Menu, X } from "lucide-react";
 import { TrimMark } from "@/components/BrandMark";
@@ -83,11 +84,12 @@ export function PaperNav() {
 export function PaperFooter() {
   return (
     <footer className="relative z-[1] bg-[var(--ink)] text-[var(--paper)]">
-      <div className="mx-auto grid max-w-7xl gap-8 px-4 pt-14 md:grid-cols-4 md:px-8">
+      <div className="mx-auto grid max-w-7xl gap-8 px-4 pt-14 md:grid-cols-5 md:px-8">
         {[
           ["Product", [["How it works", "/#how"], ["Features", "/#features"], ["Pricing", "/#pricing"], ["Dashboard", "/dashboard"]]],
           ["Help", [["Fine print", "/#faq"], ["Contact", "mailto:hello@gta6trim.com"]]],
           ["Legal", [["Terms", "/terms"], ["Privacy", "/privacy"], ["Refunds", "/refunds"]]],
+          ["Guides", GUIDES.map((g) => [g.short, `/${g.slug}`])],
         ].map(([title, links]) => (
           <div key={title as string}>
             <h3 className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-[var(--fluo)]">{title as string}</h3>

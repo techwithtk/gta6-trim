@@ -10,6 +10,7 @@ import { usePlan } from "@/lib/account";
 import { addJob, monthUsage, useJobs, type Job } from "@/lib/jobs";
 import { ClipGrid, ClipPlayer } from "@/components/ClipGrid";
 import { TrimStudio } from "@/components/TrimStudio";
+import { OnboardingChecklist } from "@/components/OnboardingChecklist";
 
 /* ---------- helpers ---------- */
 function parseYouTubeId(raw: string): string | null {
@@ -167,6 +168,8 @@ export default function MakeClipsPage() {
           <span><span className="num block font-poster text-[28px] font-black leading-none text-text">{ready ? usage.clips : "–"}</span>clips this month</span>
         </div>
       </div>
+
+      <OnboardingChecklist />
 
       {offline ? (
         <p role="status" className="mb-5 flex items-center gap-2 border border-orange/40 bg-orange/[0.07] px-4 py-3 text-sm text-orange">
