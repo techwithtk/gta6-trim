@@ -35,16 +35,36 @@ export function paymentsConfigured() {
  * Look up the paying subscription for an email in Dodo (the source of truth — no local database).
  * Returns the best active GTA6 Trim subscription, preferring the highest plan.
  */
-export async function findActiveSubscription(email: string): Promise<{ sub: string; plan: PlanId; cycle: Cycle } | null> {
+/** When a subscription's free trial ends (ms), or undefined if it has no trial or the trial is over. */
+export function trialEnd(s: { created_at: string; trial_period_days?: number | null }): number | undefined {
+  const days = Number(s.trial_period_days) || 0;
+  if (!days) return undefined;
+  const end = Date.parse(s.created_at) + days * 86400_000;
+  return end > Date.now() ? end : undefined;
+}
+
+/** A free trial is for accounts that have never had a GTA6 Trim subscription (in any state). */
+export async function trialEligible(email: string): Promise<boolean> {
+  const target = email.trim().toLowerCase();
+  for await (const customer of dodo().customers.list({ email: target, page_size: 10 })) {
+    if (customer.email?.toLowerCase() !== target) continue;
+    for await (const s of dodo().subscriptions.list({ customer_id: customer.customer_id, page_size: 50 })) {
+      if (planForProduct(s.product_id)) return false;
+    }
+  }
+  return true;
+}
+
+export async function findActiveSubscription(email: string): Promise<{ sub: string; plan: PlanId; cycle: Cycle; trialEndsAt?: number } | null> {
   if (!process.env.DODO_PAYMENTS_API_KEY) return null;
   const rank: Record<PlanId, number> = { starter: 1, pro: 2, studio: 3 };
-  let best: { sub: string; plan: PlanId; cycle: Cycle } | null = null;
+  let best: { sub: string; plan: PlanId; cycle: Cycle; trialEndsAt?: number } | null = null;
   const target = email.trim().toLowerCase();
   for await (const customer of dodo().customers.list({ email: target, page_size: 10 })) {
     if (customer.email?.toLowerCase() !== target) continue;
     for await (const s of dodo().subscriptions.list({ customer_id: customer.customer_id, status: "active", page_size: 50 })) {
       const m = planForProduct(s.product_id);
-      if (m && (!best || rank[m.plan] > rank[best.plan])) best = { sub: s.subscription_id, ...m };
+      if (m && (!best || rank[m.plan] > rank[best.plan])) best = { sub: s.subscription_id, ...m, trialEndsAt: trialEnd(s) };
     }
   }
   return best;

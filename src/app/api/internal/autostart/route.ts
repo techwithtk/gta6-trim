@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { activePlan, checkAutopost, fromWorker, type AutopostIn } from "@/lib/autopost-server";
+import { activeSub, checkAutopost, fromWorker, type AutopostIn } from "@/lib/autopost-server";
+import { trialCapError } from "@/lib/trial-server";
 import { brandCapsFor, limitsFor, worker } from "@/lib/worker";
 
 export const maxDuration = 150;
@@ -14,8 +15,11 @@ export async function POST(req: NextRequest) {
   const b = (await req.json().catch(() => ({}))) as { uid?: string; platform?: string; login?: string; autopost?: AutopostIn | null };
   if (!b.uid || !b.login) return NextResponse.json({ error: "Bad request." }, { status: 400 });
   try {
-    const plan = await activePlan(b.uid);
-    if (!plan) return NextResponse.json({ error: "No active plan, so auto-start is paused." }, { status: 403 });
+    const sub = await activeSub(b.uid);
+    if (!sub) return NextResponse.json({ error: "No active plan, so auto-start is paused." }, { status: 403 });
+    const plan = sub.plan;
+    const capped = await trialCapError(b.uid, sub.trialEndsAt, "live");
+    if (capped) return NextResponse.json({ error: capped }, { status: 429 });
     const limits = limitsFor(plan);
     const ap = await checkAutopost(b.uid, limits, b.autopost ?? undefined);
     const autopost = "autopost" in ap ? ap.autopost : undefined;

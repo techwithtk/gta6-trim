@@ -1,3 +1,4 @@
+import { trialCapError } from "@/lib/trial-server";
 import { NextResponse, type NextRequest } from "next/server";
 import { limitsFor, brandCapsFor, requirePlan, worker } from "@/lib/worker";
 
@@ -26,6 +27,8 @@ export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as { url?: string; upload?: string; title?: string; count?: number; rights?: boolean };
   if (!body.rights) return NextResponse.json({ error: "Confirm you have the rights to clip this video." }, { status: 400 });
   const limits = limitsFor(r.s.plan);
+  const capped = await trialCapError(r.s.uid, r.s.trialEndsAt, "video");
+  if (capped) return NextResponse.json({ error: capped }, { status: 429 });
   try {
     const list = (await (await worker(`/jobs?uid=${encodeURIComponent(r.s.uid)}`)).json()) as Job[];
     const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime() / 1000;

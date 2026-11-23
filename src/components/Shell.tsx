@@ -10,6 +10,7 @@ import { SignOutButton } from "@clerk/nextjs";
 import { initials, useAccount, usePlan } from "@/lib/account";
 import { monthUsage, useJobs } from "@/lib/jobs";
 import { TrimMark } from "@/components/BrandMark";
+import { TrialBanner } from "@/components/TrialBanner";
 
 const NAV = [
   { href: "/dashboard", label: "Make clips", icon: Scissors, short: "Make", soon: false },
@@ -133,7 +134,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             </div>
           </header>
 
-          <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 pb-28 pt-7 md:px-8 md:pb-12">{children}</main>
+          <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 pb-28 pt-7 md:px-8 md:pb-12"><TrialBanner />{children}</main>
         </div>
 
         {/* Bottom nav (mobile) */}

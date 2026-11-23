@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { readSession, setSession } from "@/lib/auth-server";
-import { dodo, paymentsConfigured, planForProduct } from "@/lib/dodo";
+import { dodo, paymentsConfigured, planForProduct, trialEnd } from "@/lib/dodo";
 
 /**
  * Dodo sends the buyer here after checkout with ?subscription_id=…&status=….
@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
     if (sub.status !== "active") return fail(sub.status === "pending" ? "pending" : "not_paid");
 
     const res = NextResponse.redirect(new URL("/dashboard?welcome=1", url.origin));
-    return setSession(res, req, { ...session, plan: match.plan, cycle: match.cycle, sub: sub.subscription_id, checkedAt: Date.now() });
+    return setSession(res, req, { ...session, plan: match.plan, cycle: match.cycle, sub: sub.subscription_id, trialEndsAt: trialEnd(sub), checkedAt: Date.now() });
   } catch (e) {
     console.error("[checkout] confirm failed", e instanceof Error ? e.message : e);
     return fail("lookup");

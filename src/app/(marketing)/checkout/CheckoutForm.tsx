@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { ArrowLeft, Check, Lock, ShieldCheck } from "lucide-react";
 import { EASE_OUT, SPRING, T } from "@/components/motion";
-import { PLANS, type PlanId } from "@/lib/plans";
+import { PLANS, TRIAL, type PlanId } from "@/lib/plans";
 import { SignOutButton } from "@clerk/nextjs";
 import { useAccount } from "@/lib/account";
 
@@ -31,6 +31,14 @@ export function CheckoutForm({ live }: { live: boolean }) {
   const [agree, setAgree] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(() => ERRORS[params.get("error") ?? ""] ?? null);
+  const [trialOk, setTrialOk] = useState(false);
+  const [trial, setTrial] = useState(true);
+  useEffect(() => {
+    if (!live) return;
+    fetch("/api/checkout", { cache: "no-store" }).then((r) => r.json()).then((d) => setTrialOk(!!d.trial)).catch(() => {});
+  }, [live, account.user]);
+  const onTrial = trialOk && trial;
+  const trialLen = TRIAL.days === 1 ? "24 hours" : `${TRIAL.days} days`;
 
   const plan = PLANS.find((p) => p.id === planId)!;
   const perMonth = cycle === "yearly" ? plan.yearly : plan.monthly;
@@ -44,8 +52,9 @@ export function CheckoutForm({ live }: { live: boolean }) {
     setBusy(true);
     setError(null);
     try {
-      const r = await fetch("/api/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ plan: planId, cycle }) });
+      const r = await fetch("/api/checkout", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ plan: planId, cycle, trial: onTrial }) });
       const j = await r.json();
+      if (r.status === 409 && j.trial === false) setTrialOk(false);
       if (!r.ok || !j.url) throw new Error(j.error ?? "Couldn't start checkout.");
       window.location.href = j.url; // Dodo's hosted, secure checkout
     } catch (e) {
@@ -144,11 +153,28 @@ export function CheckoutForm({ live }: { live: boolean }) {
             </p>
           ) : null}
 
-          <div className="mt-6 space-y-2 border-t border-line pt-4 text-sm">
+          {trialOk ? (
+            <label className={`mt-6 flex cursor-pointer items-start gap-2.5 border-2 px-3 py-2.5 text-sm ${trial ? "border-[var(--ink)] bg-[var(--fluo)]/30" : "border-line"}`}>
+              <input type="checkbox" checked={trial} onChange={(e) => setTrial(e.target.checked)} className="mt-0.5 size-4 accent-[var(--pink)]" />
+              <span>
+                <span className="font-bold">Try it free for {TRIAL.days === 1 ? "1 day" : `${TRIAL.days} days`}</span>
+                <span className="block text-xs text-muted">{TRIAL.liveSessions} live sessions + {TRIAL.videos} YouTube videos, with every {plan.name} feature. Card needed to verify, $0 today.</span>
+              </span>
+            </label>
+          ) : null}
+
+          <div className={`${trialOk ? "mt-4" : "mt-6"} space-y-2 border-t border-line pt-4 text-sm`}>
             <Row label={`${plan.name} · ${cycle}`} value={`$${perMonth}/mo`} />
             {cycle === "yearly" ? <Row label="Billed yearly" value={`$${plan.yearly * 12}`} /> : null}
-            <Row label="Due today" value={`$${dueToday}`} strong />
+            {onTrial ? <Row label={`After ${trialLen}`} value={`$${dueToday}`} /> : null}
+            <Row label="Due today" value={onTrial ? "$0" : `$${dueToday}`} strong />
           </div>
+          {onTrial ? (
+            <p className="mt-2 text-xs text-muted">
+              Your {plan.name} plan starts automatically after {trialLen} and your card is charged ${dueToday}{cycle === "yearly" ? " for the year" : " a month"}.
+              Cancel anytime before then from Plan &amp; billing and you pay nothing. We remind you in the app before it ends.
+            </p>
+          ) : null}
 
           <label className="mt-4 flex cursor-pointer items-start gap-2.5 text-xs text-muted">
             <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5 size-4 accent-[var(--pink)]" />
@@ -162,7 +188,7 @@ export function CheckoutForm({ live }: { live: boolean }) {
             disabled={!ready || !live || busy || !!account.plan}
             className="mt-5 inline-flex h-14 w-full items-center justify-center gap-2 border-2 border-[var(--ink)] bg-[var(--fluo)] px-3 font-poster text-lg font-black uppercase sm:text-2xl shadow-[6px_6px_0_var(--ink)] transition-transform duration-150 enabled:hover:-translate-x-0.5 enabled:hover:-translate-y-0.5 disabled:opacity-40 disabled:shadow-none"
           >
-            <Lock className="size-4" /> {busy ? "Opening secure checkout…" : "Continue to secure payment"}
+            <Lock className="size-4" /> {busy ? "Opening secure checkout…" : onTrial ? "Start free trial" : "Continue to secure payment"}
           </button>
           {error ? (
             <p role="alert" className="mt-3 border border-red/30 bg-red/[0.06] px-3 py-2 text-xs text-red">{error}</p>

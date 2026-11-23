@@ -21,12 +21,16 @@ export async function checkAutopost(uid: string, limits: Limits, a?: AutopostIn)
   return { autopost: { accounts: mine.map((x) => x.id), minScore: Number(a.minScore) || 0.75, gapMin: Number(a.gapMin) || 60, consent: !!a.consent } };
 }
 
-/** The customer's current paid plan, looked up fresh (for calls from the worker, where there is no browser session). */
-export async function activePlan(uid: string): Promise<PlanId | null> {
+/** The customer's current paid plan (and free-trial end, if any), looked up fresh — for calls from the worker, where there is no browser session. */
+export async function activeSub(uid: string): Promise<{ plan: PlanId; trialEndsAt?: number } | null> {
   const user = await (await clerkClient()).users.getUser(uid);
   const email = (user.emailAddresses.find((e) => e.id === user.primaryEmailAddressId) ?? user.emailAddresses[0])?.emailAddress;
   const sub = email ? await findActiveSubscription(email) : null;
-  return sub && planById(sub.plan) ? sub.plan : null;
+  return sub && planById(sub.plan) ? { plan: sub.plan, trialEndsAt: sub.trialEndsAt } : null;
+}
+
+export async function activePlan(uid: string): Promise<PlanId | null> {
+  return (await activeSub(uid))?.plan ?? null;
 }
 
 const SECRET = process.env.WORKER_SECRET ?? "";

@@ -131,8 +131,12 @@ type RawPost = {
   externalData?: Record<string, { permalink?: string | null } | null> | null;
 };
 
-/** referenceKey = "<jobId>/<file>@<sentAt>" — the same for every slot team a single "Post" click went to. */
+/**
+ * referenceKey = "<jobId>/<file>@<sentAt>~<n>": bundle.social needs it unique across the whole organization, so each slot
+ * team a single "Post" click goes to gets its own "~<n>". groupOf() strips that to put the parts of one click back together.
+ */
 const clipOf = (ref?: string | null) => (ref && ref.includes("@") ? ref.slice(0, ref.lastIndexOf("@")) : undefined);
+const groupOf = (ref: string) => ref.replace(/~\d+$/, "");
 
 function rollup(parts: RawPost[]): PostResult {
   const platforms = parts.flatMap((p) =>
@@ -150,7 +154,7 @@ function rollup(parts: RawPost[]): PostResult {
     : s.some((x) => x === "scheduled") && !s.some((x) => x === "publishing") ? "scheduled"
     : "publishing";
   const first = parts[0];
-  return { id: first.referenceKey ?? first.id, status, externalId: clipOf(first.referenceKey), createdAt: first.createdAt ?? undefined, scheduledFor: first.postDate ?? undefined, platforms };
+  return { id: first.referenceKey ? groupOf(first.referenceKey) : first.id, status, externalId: clipOf(first.referenceKey), createdAt: first.createdAt ?? undefined, scheduledFor: first.postDate ?? undefined, platforms };
 }
 
 export type PostInput = {
@@ -164,15 +168,16 @@ export type PostInput = {
 };
 
 export async function createPost(i: PostInput): Promise<PostResult> {
-  const ref = `${i.externalId}@${Date.now()}`.slice(0, 128);
+  const ref = `${i.externalId}@${Date.now()}`.slice(0, 120);
   const byTeam = new Map<string, SocialAccount[]>();
   for (const a of i.accounts) {
     const t = parseAccountId(a.id)!.teamId;
     byTeam.set(t, [...(byTeam.get(t) ?? []), a]);
   }
   const postDate = i.scheduledFor ?? new Date().toISOString();
-  const created = await Promise.all(
-    [...byTeam].map(async ([teamId, accts]) => {
+  const teams = [...byTeam];
+  const settled = await Promise.allSettled(
+    teams.map(async ([teamId, accts], n) => {
       const up = await b<{ id: string }>("/upload/from-url", { method: "POST", body: JSON.stringify({ teamId, url: i.videoUrl }), signal: AbortSignal.timeout(120_000) });
       const data: Record<string, unknown> = {};
       for (const a of accts) {
@@ -184,12 +189,24 @@ export async function createPost(i: PostInput): Promise<PostResult> {
       }
       return b<RawPost>("/post/", {
         method: "POST",
-        body: JSON.stringify({ teamId, title: i.title.slice(0, 100) || "GTA 6 clip", referenceKey: ref, postDate, status: "SCHEDULED", socialAccountTypes: accts.map((a) => TYPE[a.platform]), data }),
+        body: JSON.stringify({ teamId, title: i.title.slice(0, 100) || "GTA 6 clip", referenceKey: `${ref}~${n}`, postDate, status: "SCHEDULED", socialAccountTypes: accts.map((a) => TYPE[a.platform]), data }),
         signal: AbortSignal.timeout(60_000),
       });
     }),
   );
-  return rollup(created.map((p) => ({ ...p, referenceKey: p.referenceKey ?? ref })));
+  // One team failing (a disconnected page, a platform hiccup) must not hide the posts that did go out to the others.
+  const created: RawPost[] = [];
+  settled.forEach((res, n) => {
+    const [teamId, accts] = teams[n];
+    if (res.status === "fulfilled") created.push({ ...res.value, referenceKey: res.value.referenceKey ?? `${ref}~${n}` });
+    else {
+      const msg = res.reason instanceof Error ? res.reason.message : "Posting failed.";
+      created.push({ id: `${ref}~${n}`, teamId, referenceKey: `${ref}~${n}`, status: "ERROR", error: msg, createdAt: new Date().toISOString(),
+        data: Object.fromEntries(accts.map((a) => [TYPE[a.platform], {}])) });
+    }
+  });
+  if (settled.every((x) => x.status === "rejected")) throw (settled[0] as PromiseRejectedResult).reason;
+  return rollup(created);
 }
 
 /** Recent posts across the customer's slots, one entry per "Post" click. */
@@ -199,7 +216,7 @@ export async function listPosts(uid: string): Promise<PostResult[]> {
     await Promise.all(mine.map((s) => b<{ items?: RawPost[] }>(`/post/?teamId=${s.id}&orderBy=createdAt&order=DESC&limit=100`).then((d) => d.items ?? [])))
   ).flat().filter((p) => clipOf(p.referenceKey) && p.status !== "DELETED");
   const groups = new Map<string, RawPost[]>();
-  for (const p of all) groups.set(p.referenceKey!, [...(groups.get(p.referenceKey!) ?? []), p]);
+  for (const p of all) { const g = groupOf(p.referenceKey!); groups.set(g, [...(groups.get(g) ?? []), p]); }
   return [...groups.values()].map(rollup).sort((a, z) => (z.createdAt ?? "").localeCompare(a.createdAt ?? ""));
 }
 

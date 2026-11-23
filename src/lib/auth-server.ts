@@ -38,12 +38,12 @@ export async function buildSession(previous?: Session | null): Promise<Session |
   }
   try {
     const found = await findActiveSubscription(email);
-    return { ...base, plan: found?.plan ?? null, cycle: found?.cycle, sub: found?.sub, checkedAt: Date.now() };
+    return { ...base, plan: found?.plan ?? null, cycle: found?.cycle, sub: found?.sub, trialEndsAt: found?.trialEndsAt, checkedAt: Date.now() };
   } catch (e) {
     // Dodo unreachable: keep the last known plan for the same user rather than locking a paying customer out.
     console.error("[auth] plan lookup failed", e instanceof Error ? e.message : e);
     const keep = previous && previous.uid === base.uid ? previous : null;
-    return { ...base, plan: keep?.plan ?? null, cycle: keep?.cycle, sub: keep?.sub, checkedAt: Date.now() };
+    return { ...base, plan: keep?.plan ?? null, cycle: keep?.cycle, sub: keep?.sub, trialEndsAt: keep?.trialEndsAt, checkedAt: Date.now() };
   }
 }
 

@@ -9,6 +9,7 @@ import { compact, PLATFORM_META, refreshOneStat, refreshPosts, refreshStats, sta
 import { quickReason } from "@/lib/postErrors";
 import { PostModal } from "@/components/PostModal";
 import { Insights } from "@/components/Insights";
+import { RepostCard } from "@/components/RepostCard";
 import type { SocialPlatform } from "@/lib/plans";
 
 const ORDER: SocialPlatform[] = ["tiktok", "youtube", "instagram", "facebook"];
@@ -134,6 +135,7 @@ export default function PostedPage() {
       </ul>
 
       {social.ready && !social.error && social.posts.length ? <Insights posts={social.posts} stats={stats} jobs={jobs} /> : null}
+      {social.ready && !social.error ? <RepostCard accounts={social.accounts} ready={social.ready} /> : null}
 
       {/* Filters */}
       <div className="mb-4 flex flex-wrap items-center gap-3">

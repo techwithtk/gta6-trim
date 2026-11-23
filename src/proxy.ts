@@ -1,6 +1,6 @@
 import { clerkMiddleware } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { RECHECK_MS, SESSION_COOKIE, decodeSession } from "@/lib/session";
+import { SESSION_COOKIE, decodeSession, isStale } from "@/lib/session";
 
 const isDashboard = (path: string) => path === "/dashboard" || path.startsWith("/dashboard/");
 
@@ -17,7 +17,7 @@ export default clerkMiddleware(async (auth, req) => {
   if (!userId) return NextResponse.redirect(new URL(`/login?redirect_url=${encodeURIComponent(here)}`, req.url));
 
   const s = await decodeSession(req.cookies.get(SESSION_COOKIE)?.value);
-  if (!s || s.uid !== userId || Date.now() - s.checkedAt > RECHECK_MS) {
+  if (!s || s.uid !== userId || isStale(s)) {
     return NextResponse.redirect(new URL(`/api/auth/refresh?next=${encodeURIComponent(here)}`, req.url));
   }
   if (!s.plan) return NextResponse.redirect(new URL("/checkout?plan=pro&need=plan", req.url));

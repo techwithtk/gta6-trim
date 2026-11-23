@@ -10,7 +10,8 @@ import { ClipPlayer } from "@/components/ClipGrid";
 import { TrimStudio } from "@/components/TrimStudio";
 import { PLATFORM_META, useSocial, type SocialAccount } from "@/lib/social";
 
-const SCORES = [{ v: 0.85, label: "8.5+ · only the very best" }, { v: 0.75, label: "7.5+ · recommended" }, { v: 0.65, label: "6.5+ · more posts" }];
+// Live clips score lower than video clips (10-minute chunks have fewer standout moments), so the bar sits lower here.
+const SCORES = [{ v: 0.7, label: "7+ · only standout moments" }, { v: 0.6, label: "6+ · recommended" }, { v: 0.5, label: "5+ · more posts" }];
 const GAPS = [{ v: 30, label: "every 30 min" }, { v: 60, label: "every hour" }, { v: 120, label: "every 2 hours" }, { v: 180, label: "every 3 hours" }];
 type AutoForm = { on: boolean; accounts: string[]; minScore: number; gapMin: number; consent: boolean };
 
@@ -50,7 +51,7 @@ export default function LivePage() {
   const [now, setNow] = useState<number | null>(null);
   const studio = plan.limits.autopost;
   const social = useSocial(studio);
-  const [auto, setAuto] = useState<AutoForm>({ on: false, accounts: [], minScore: 0.75, gapMin: 60, consent: false });
+  const [auto, setAuto] = useState<AutoForm>({ on: false, accounts: [], minScore: 0.6, gapMin: 60, consent: false });
 
   useEffect(() => {
     let live = true;
@@ -383,7 +384,7 @@ function AutoPostForm({ studio, accounts, ready, value, onChange, tiktok }: { st
                 <span>I agree to TikTok&apos;s <a href="https://www.tiktok.com/legal/page/global/music-usage-confirmation/en" target="_blank" rel="noreferrer" className="underline underline-offset-2">Music Usage Confirmation</a> for these posts. They post publicly.</span>
               </label>
             ) : null}
-            <p className="text-[11px] text-subtle">Each post uses the clip&apos;s title plus #GTA6 hashtags. Posting less often keeps your accounts safe from spam limits.</p>
+            <p className="text-[11px] text-subtle">Each post gets AI-written text and goes to every account you ticked. If no clip clears the bar for a while, we still post the best decent one so your pages don&apos;t go quiet. Posting less often keeps your accounts safe from spam limits.</p>
           </div>
         )
       ) : null}

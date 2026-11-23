@@ -8,6 +8,9 @@ export type StorageProvider = "gdrive" | "dropbox" | "onedrive" | "box";
 /** Hard product rule: never more than 3 accounts per social platform. Auto-posting is a Studio (and Enterprise) feature only. */
 export const MAX_ACCOUNTS_PER_PLATFORM = 3;
 
+/** Free trial: card required, $0 today, the plan starts (and is charged) after TRIAL.days unless cancelled. One per account. */
+export const TRIAL = { days: 1, liveSessions: 2, videos: 2 } as const; // same caps on every plan, Studio included
+
 export type Plan = {
   id: PlanId;
   name: string;

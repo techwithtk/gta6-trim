@@ -643,7 +643,7 @@ function Pricing() {
               per={yearly ? `/mo · $${p.yearly * 12} billed yearly` : "/month"}
               features={p.features}
               href={`/checkout?plan=${p.id}&cycle=${yearly ? "yearly" : "monthly"}`}
-              cta={`Choose ${p.name}`}
+              cta={`Try ${p.name} free for 1 day`}
               tone={p.highlight ? "fluo" : i === 0 ? "plain" : "paper"}
               stamp={p.highlight ? "Most clipped" : undefined}
               serial={`CW-${String(i + 1).padStart(2, "0")}`}
