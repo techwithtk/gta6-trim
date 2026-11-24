@@ -10,6 +10,7 @@ export type Account = {
   cycle: "monthly" | "yearly" | null;
   trialEndsAt?: number | null;
   team?: { owner: string } | null; // set when this person uses a seat on someone else's Studio plan
+  admin?: boolean; // site owner (ADMIN_EMAILS): sees the conversion funnel
 };
 
 let state: Account = { status: "loading", user: null, plan: null, cycle: null };
@@ -22,7 +23,7 @@ function load() {
   fetch("/api/auth/me", { cache: "no-store" })
     .then((r) => r.json())
     .then((d) => {
-      state = { status: "ready", user: d.user, plan: d.plan, cycle: d.cycle, trialEndsAt: d.trialEndsAt ?? null, team: d.team ?? null };
+      state = { status: "ready", user: d.user, plan: d.plan, cycle: d.cycle, trialEndsAt: d.trialEndsAt ?? null, team: d.team ?? null, admin: !!d.admin };
     })
     .catch(() => {
       state = { ...state, status: "ready" };

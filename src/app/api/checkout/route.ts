@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { readSession } from "@/lib/auth-server";
 import { dodo, paymentsConfigured, productId, trialEligible, type Cycle } from "@/lib/dodo";
 import { PLANS, TRIAL, type PlanId } from "@/lib/plans";
+import { track } from "@/lib/track-server";
 
 /**
  * Creates a Dodo Payments checkout session for the signed-in user and returns the hosted checkout URL.
@@ -36,6 +37,7 @@ export async function POST(req: NextRequest) {
       return_url: `${origin}/api/checkout/confirm`,
     });
     if (!checkout.checkout_url) throw new Error("No checkout URL returned");
+    await track("checkout_start", { uid: session.uid, props: { plan, cycle, trial: !!body.trial } });
     return Response.json({ url: checkout.checkout_url });
   } catch (e) {
     console.error("[checkout] create failed", e instanceof Error ? e.message : e);

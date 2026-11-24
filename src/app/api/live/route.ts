@@ -2,6 +2,7 @@ import { trialCapError } from "@/lib/trial-server";
 import { NextResponse, type NextRequest } from "next/server";
 import { limitsFor, brandCapsFor, requirePlan, worker } from "@/lib/worker";
 import { checkAutopost, type AutopostIn } from "@/lib/autopost-server";
+import { track } from "@/lib/track-server";
 
 /** Start clipping a live Twitch or Kick stream. The plan's live-slot limit is enforced by the worker against your active sessions. */
 export async function POST(req: NextRequest) {
@@ -25,6 +26,7 @@ export async function POST(req: NextRequest) {
       signal: AbortSignal.timeout(120_000),
     });
     const d = await res.json();
+    if (res.ok) await track("first_clip", { uid: r.s.uid, props: { kind: "live" } });
     return NextResponse.json(d, { status: res.ok ? 201 : res.status });
   } catch {
     return NextResponse.json({ error: "The clipping engine is offline right now. Try again soon." }, { status: 503 });

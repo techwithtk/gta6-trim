@@ -3,6 +3,7 @@ import { auth, clerkClient, currentUser } from "@clerk/nextjs/server";
 import { NextResponse, type NextRequest } from "next/server";
 import { findActiveSubscription } from "@/lib/dodo";
 import { planById } from "@/lib/plans";
+import { track } from "@/lib/track-server";
 import { SESSION_COOKIE, SESSION_MAX_AGE, cookieOptions, decodeSession, encodeSession, type Session } from "@/lib/session";
 
 /**
@@ -25,6 +26,7 @@ export async function buildSession(previous?: Session | null): Promise<Session |
   const primary = user.emailAddresses.find((e) => e.id === user.primaryEmailAddressId) ?? user.emailAddresses[0];
   if (!primary || primary.verification?.status !== "verified") return null;
   const email = primary.emailAddress.toLowerCase();
+  if (!previous && Date.now() - user.createdAt < 30 * 60_000) await track("signup", { uid: user.id });
   const base = {
     uid: user.id,
     email,

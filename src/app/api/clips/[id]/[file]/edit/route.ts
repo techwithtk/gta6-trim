@@ -19,17 +19,17 @@ export async function GET(req: NextRequest, { params }: P) {
   }
 }
 
-/** POST {start, end, hook, words: {index: text}} → re-render the clip with the new cut, captions and hook. */
+/** POST {start, end, hook, words: {index: text}, stickers, layout} → re-render the clip with the new cut, captions, hook and camera/gameplay boxes. */
 export async function POST(req: NextRequest, { params }: P) {
   const r = await requirePlan(req);
   if ("error" in r) return r.error;
   const { id, file } = await params;
   if (!valid(id, file)) return NextResponse.json({ error: "not found" }, { status: 404 });
-  const b = (await req.json().catch(() => ({}))) as { start?: number; end?: number; hook?: string; words?: Record<string, string> };
+  const b = (await req.json().catch(() => ({}))) as { start?: number; end?: number; hook?: string; words?: Record<string, string>; stickers?: boolean; layout?: unknown };
   try {
     const res = await worker(`/jobs/${id}/clips/${file}/edit`, {
       method: "POST",
-      body: JSON.stringify({ uid: r.s.uid, start: b.start, end: b.end, hook: String(b.hook ?? "").slice(0, 80), words: b.words ?? {} }),
+      body: JSON.stringify({ uid: r.s.uid, start: b.start, end: b.end, hook: String(b.hook ?? "").slice(0, 80), words: b.words ?? {}, stickers: b.stickers !== false, layout: b.layout ?? null }),
     });
     return NextResponse.json(await res.json(), { status: res.status });
   } catch {

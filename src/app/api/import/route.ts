@@ -1,10 +1,11 @@
 import { trialCapError } from "@/lib/trial-server";
 import { NextResponse, type NextRequest } from "next/server";
 import { limitsFor, brandCapsFor, requirePlan, worker } from "@/lib/worker";
+import { track } from "@/lib/track-server";
 
 type Job = { createdAt: number; status?: string; kind?: string };
 /** Videos that count toward the monthly limit: started this month, not failed, not live sessions. */
-const counted = (jobs: Job[], since: number) => jobs.filter((j) => j.createdAt >= since && j.status !== "error" && j.kind !== "live").length;
+const counted = (jobs: Job[], since: number) => jobs.filter((j) => j.createdAt >= since && j.status !== "error" && j.kind !== "live" && j.kind !== "drive").length;
 
 /** Your recent imports, plus how many you've used this month. */
 export async function GET(req: NextRequest) {
@@ -45,6 +46,7 @@ export async function POST(req: NextRequest) {
         brandCaps: brandCapsFor(r.s.plan),
       }),
     });
+    if (res.ok) await track("first_clip", { uid: r.s.uid, props: { kind: "video" } });
     return NextResponse.json(await res.json(), { status: res.status });
   } catch {
     return NextResponse.json({ error: "The clipping engine is offline right now. Try again soon." }, { status: 503 });

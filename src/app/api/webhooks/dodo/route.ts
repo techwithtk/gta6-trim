@@ -1,4 +1,13 @@
+import { clerkClient } from "@clerk/nextjs/server";
 import { dodo } from "@/lib/dodo";
+import { track } from "@/lib/track-server";
+
+/** The Clerk account for a paying email, so payments and cancellations join the same person in the funnel. */
+async function uidFor(email: string): Promise<string | null> {
+  if (!email) return null;
+  const list = await (await clerkClient()).users.getUserList({ emailAddress: [email.toLowerCase()], limit: 1 }).catch(() => null);
+  return list?.data[0]?.id ?? null;
+}
 
 /**
  * Dodo Payments webhook (Standard Webhooks signature).
@@ -24,5 +33,14 @@ export async function POST(req: Request) {
 
   const d = event.data ?? {};
   console.log("[dodo webhook]", event.type, d.subscription_id ?? d.payment_id ?? "", d.status ?? "");
+  // Conversion tracking: a real charge (> $0, so trial mandates don't count) and cancellations.
+  const email = String((d.customer as { email?: string } | undefined)?.email ?? "");
+  if (event.type === "payment.succeeded" && Number(d.total_amount ?? 0) > 0) {
+    const uid = await uidFor(email);
+    if (uid) await track("paid", { uid, anon: null, props: { amount: Number(d.total_amount), currency: String(d.currency ?? "") } });
+  } else if (event.type === "subscription.cancelled") {
+    const uid = await uidFor(email);
+    if (uid) await track("cancelled", { uid, anon: null });
+  }
   return Response.json({ received: true });
 }

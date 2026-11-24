@@ -13,7 +13,7 @@ const ORDER: SocialPlatform[] = ["tiktok", "youtube", "instagram", "facebook"];
 const PRIMARY =
   "inline-flex items-center justify-center gap-2 border-2 border-black bg-pink font-poster font-black uppercase text-black shadow-[3px_3px_0_#fafafa] transition-transform duration-150 hover:-translate-y-0.5 disabled:pointer-events-none disabled:opacity-35 disabled:shadow-none";
 
-const defaultCaption = (c: Clip) => `${c.title}\n\n#GTA6 #GTAVI #gaming #shorts`;
+const defaultCaption = (c: Clip) => c.text?.instagram || `${c.title}\n\n#GTA6 #GTAVI #gaming #shorts`;
 const localInput = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
 /** Post (or schedule) one finished Short to the customer's connected accounts. */

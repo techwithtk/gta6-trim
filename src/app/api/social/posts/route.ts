@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireStudio, socialError } from "@/lib/social-server";
 import { createPost, listAccounts, listPosts } from "@/lib/bundle";
 import { worker } from "@/lib/worker";
+import { track } from "@/lib/track-server";
 
 const MAX_SCHEDULE_DAYS = 6; // clip links handed to the posting service last 7 days
 
@@ -48,6 +49,7 @@ export async function POST(req: NextRequest) {
     if (!videoUrl) return NextResponse.json({ error: "We couldn't find that clip." }, { status: 404 });
 
     const post = await createPost({ uid: r.s.uid, externalId: `${b.jobId}/${b.file}`, caption, title, videoUrl, accounts, scheduledFor });
+    await track("first_post", { uid: r.s.uid });
     return NextResponse.json({ post }, { status: 201 });
   } catch (e) {
     return socialError(e);

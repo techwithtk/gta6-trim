@@ -264,7 +264,7 @@ button, a, select { cursor: pointer; }
    The dashboard wrapper (#gt-app) carries data-theme="light" | "dark". Light swaps the tokens, then maps the
    white-on-dark hairlines/tints used across the dashboard to ink-on-paper. Overlays on video (bg-black/…) stay dark. */
 #gt-app { background: var(--bg); color: var(--text); min-height: 100dvh; color-scheme: dark; }
-#gt-app[data-theme="light"] {
+#gt-app:is([data-theme="light"],[data-theme="comic"]) {
   color-scheme: light;
   --bg: #f4f3ef;
   --surface: #ffffff;
@@ -282,36 +282,125 @@ button, a, select { cursor: pointer; }
   --red: #dc2626;
   --violet: #6d28d9;
 }
-#gt-app[data-theme="light"] ::selection { background: rgba(224, 18, 111, 0.22); }
+#gt-app:is([data-theme="light"],[data-theme="comic"]) ::selection { background: rgba(224, 18, 111, 0.22); }
 
 /* hairlines and tints drawn in white on dark → ink on paper */
-#gt-app[data-theme="light"] [class~="border-white/10"], #gt-app[data-theme="light"] [class~="ring-white/10"] { border-color: rgba(17,17,19,.10); --tw-ring-color: rgba(17,17,19,.10); }
-#gt-app[data-theme="light"] [class~="border-white/15"] { border-color: rgba(17,17,19,.13); }
-#gt-app[data-theme="light"] [class~="border-white/20"] { border-color: rgba(17,17,19,.17); }
-#gt-app[data-theme="light"] [class~="border-white/25"] { border-color: rgba(17,17,19,.22); }
-#gt-app[data-theme="light"] [class~="border-white/40"] { border-color: rgba(17,17,19,.32); }
-#gt-app[data-theme="light"] [class~="border-white/85"] { border-color: #111113; }
-#gt-app[data-theme="light"] [class~="hover:border-white/30"]:hover { border-color: rgba(17,17,19,.30); }
-#gt-app[data-theme="light"] [class~="hover:border-white/40"]:hover { border-color: rgba(17,17,19,.38); }
-#gt-app[data-theme="light"] [class~="bg-white/5"], #gt-app[data-theme="light"] [class~="bg-white/[0.03]"],
-#gt-app[data-theme="light"] [class~="bg-white/[0.04]"] { background-color: rgba(17,17,19,.035); }
-#gt-app[data-theme="light"] [class~="bg-white/[0.06]"], #gt-app[data-theme="light"] [class~="bg-white/[0.07]"],
-#gt-app[data-theme="light"] [class~="bg-white/[0.08]"] { background-color: rgba(17,17,19,.055); }
-#gt-app[data-theme="light"] [class~="bg-white/10"], #gt-app[data-theme="light"] [class~="bg-white/12"] { background-color: rgba(17,17,19,.075); }
-#gt-app[data-theme="light"] [class~="bg-white/15"], #gt-app[data-theme="light"] [class~="bg-white/25"],
-#gt-app[data-theme="light"] [class~="bg-white/35"] { background-color: rgba(17,17,19,.12); }
-#gt-app[data-theme="light"] [class~="hover:bg-white/[0.02]"]:hover, #gt-app[data-theme="light"] [class~="hover:bg-white/[0.05]"]:hover,
-#gt-app[data-theme="light"] [class~="hover:bg-white/[0.06]"]:hover { background-color: rgba(17,17,19,.05); }
+#gt-app:is([data-theme="light"],[data-theme="comic"]) [class~="border-white/10"], #gt-app:is([data-theme="light"],[data-theme="comic"]) [class~="ring-white/10"] { border-color: rgba(17,17,19,.10); --tw-ring-color: rgba(17,17,19,.10); }
+#gt-app:is([data-theme="light"],[data-theme="comic"]) [class~="border-white/15"] { border-color: rgba(17,17,19,.13); }
+#gt-app:is([data-theme="light"],[data-theme="comic"]) [class~="border-white/20"] { border-color: rgba(17,17,19,.17); }
+#gt-app:is([data-theme="light"],[data-theme="comic"]) [class~="border-white/25"] { border-color: rgba(17,17,19,.22); }
+#gt-app:is([data-theme="light"],[data-theme="comic"]) [class~="border-white/40"] { border-color: rgba(17,17,19,.32); }
+#gt-app:is([data-theme="light"],[data-theme="comic"]) [class~="border-white/85"] { border-color: #111113; }
+#gt-app:is([data-theme="light"],[data-theme="comic"]) [class~="hover:border-white/30"]:hover { border-color: rgba(17,17,19,.30); }
+#gt-app:is([data-theme="light"],[data-theme="comic"]) [class~="hover:border-white/40"]:hover { border-color: rgba(17,17,19,.38); }
+#gt-app:is([data-theme="light"],[data-theme="comic"]) [class~="bg-white/5"], #gt-app:is([data-theme="light"],[data-theme="comic"]) [class~="bg-white/[0.03]"],
+#gt-app:is([data-theme="light"],[data-theme="comic"]) [class~="bg-white/[0.04]"] { background-color: rgba(17,17,19,.035); }
+#gt-app:is([data-theme="light"],[data-theme="comic"]) [class~="bg-white/[0.06]"], #gt-app:is([data-theme="light"],[data-theme="comic"]) [class~="bg-white/[0.07]"],
+#gt-app:is([data-theme="light"],[data-theme="comic"]) [class~="bg-white/[0.08]"] { background-color: rgba(17,17,19,.055); }
+#gt-app:is([data-theme="light"],[data-theme="comic"]) [class~="bg-white/10"], #gt-app:is([data-theme="light"],[data-theme="comic"]) [class~="bg-white/12"] { background-color: rgba(17,17,19,.075); }
+#gt-app:is([data-theme="light"],[data-theme="comic"]) [class~="bg-white/15"], #gt-app:is([data-theme="light"],[data-theme="comic"]) [class~="bg-white/25"],
+#gt-app:is([data-theme="light"],[data-theme="comic"]) [class~="bg-white/35"] { background-color: rgba(17,17,19,.12); }
+#gt-app:is([data-theme="light"],[data-theme="comic"]) [class~="hover:bg-white/[0.02]"]:hover, #gt-app:is([data-theme="light"],[data-theme="comic"]) [class~="hover:bg-white/[0.05]"]:hover,
+#gt-app:is([data-theme="light"],[data-theme="comic"]) [class~="hover:bg-white/[0.06]"]:hover { background-color: rgba(17,17,19,.05); }
 
 /* selected tabs: solid white chip with black text → solid ink chip with paper text */
-#gt-app[data-theme="light"] [class~="bg-white"][class~="text-black"] { background-color: #111113; color: #f4f3ef; }
-#gt-app[data-theme="light"] [class~="hover:bg-white/90"][class~="text-black"]:hover { background-color: #2a2a2e; }
+#gt-app:is([data-theme="light"],[data-theme="comic"]) [class~="bg-white"][class~="text-black"] { background-color: #111113; color: #f4f3ef; }
+#gt-app:is([data-theme="light"],[data-theme="comic"]) [class~="hover:bg-white/90"][class~="text-black"]:hover { background-color: #2a2a2e; }
 
 /* poster shadows drawn in off-white → ink */
-#gt-app[data-theme="light"] [class~="shadow-[3px_3px_0_#fafafa]"] { box-shadow: 3px 3px 0 #111113; }
-#gt-app[data-theme="light"] [class~="shadow-[4px_4px_0_#fafafa]"] { box-shadow: 4px 4px 0 #111113; }
-#gt-app[data-theme="light"] [class~="border-white/85"][class*="shadow-[6px_6px_0_var(--pink)]"] { box-shadow: 6px 6px 0 var(--pink); }
+#gt-app:is([data-theme="light"],[data-theme="comic"]) [class~="shadow-[3px_3px_0_#fafafa]"] { box-shadow: 3px 3px 0 #111113; }
+#gt-app:is([data-theme="light"],[data-theme="comic"]) [class~="shadow-[4px_4px_0_#fafafa]"] { box-shadow: 4px 4px 0 #111113; }
+#gt-app:is([data-theme="light"],[data-theme="comic"]) [class~="border-white/85"][class*="shadow-[6px_6px_0_var(--pink)]"] { box-shadow: 6px 6px 0 var(--pink); }
 
 /* text on dark video overlays and dark badges stays light */
-#gt-app[data-theme="light"] [class*="bg-black/"] { color: #fafafa; }
-#gt-app[data-theme="light"] [class*="bg-black/"] [class~="text-muted"], #gt-app[data-theme="light"] [class*="bg-black/"] [class~="text-subtle"] { color: #d4d4d8; }
+#gt-app:is([data-theme="light"],[data-theme="comic"]) [class*="bg-black/"] { color: #fafafa; }
+#gt-app:is([data-theme="light"],[data-theme="comic"]) [class*="bg-black/"] [class~="text-muted"], #gt-app:is([data-theme="light"],[data-theme="comic"]) [class*="bg-black/"] [class~="text-subtle"] { color: #d4d4d8; }
+
+/* ------------------------------------------------------------------ Dashboard comic theme (default)
+   Built on the light mappings above (ink on paper), then: sunburst yellow page, pink halftone sidebar, cream cards with
+   thick ink borders and hard shadows, chunky rounded pills, and a comic headline font. Video overlays stay dark. */
+#gt-app[data-theme="comic"] {
+  --bg: #ffd84d;
+  --surface: #fffaeb;
+  --surface-2: #fff3cf;
+  --surface-3: #ffe8a3;
+  --line: #141210;
+  --line-strong: #141210;
+  --text: #141210;
+  --muted: #3d3730;
+  --subtle: #5c544a;
+  --pink: #ff2e88;
+  --orange: #ff7a1a;
+  --cyan: #1d7fe0;
+  --green: #0c8a3c;
+  --red: #d61f1f;
+  --ink: #141210;
+  background:
+    repeating-conic-gradient(from 0deg at 62% -10%, rgba(255, 168, 0, 0.42) 0deg 7deg, rgba(255, 168, 0, 0) 7deg 14deg),
+    radial-gradient(circle at 62% -10%, #fff1a8 0%, #ffd84d 45%, #ffc21f 100%);
+  background-attachment: fixed;
+}
+#gt-app[data-theme="comic"] .ambient { display: none; }
+#gt-app[data-theme="comic"] ::selection { background: #ff2e88; color: #fff; }
+
+/* headlines */
+#gt-app[data-theme="comic"] main h1 {
+  font-family: var(--font-comic), var(--font-poster), sans-serif; font-weight: 400; text-transform: uppercase;
+  letter-spacing: 0.03em; font-size: 40px; line-height: 1; color: var(--ink);
+  text-shadow: 3px 3px 0 #fff, 5px 5px 0 var(--ink);
+}
+#gt-app[data-theme="comic"] main h2[class~="uppercase"] {
+  font-family: var(--font-comic), sans-serif; font-weight: 400; font-size: 18px; letter-spacing: 0.06em; color: var(--ink);
+}
+
+/* sidebar: pink with halftone dots, chunky pill links */
+#gt-app[data-theme="comic"] .gt-sidebar {
+  background: radial-gradient(rgba(20, 18, 16, 0.16) 1.4px, transparent 1.6px) 0 0 / 9px 9px, #ff2e88;
+  border-right: 4px solid var(--ink); backdrop-filter: none;
+}
+#gt-app[data-theme="comic"] .gt-sidebar nav { gap: 10px; padding: 0 14px; }
+#gt-app[data-theme="comic"] .gt-nav {
+  height: 46px; border: 3px solid var(--ink); border-radius: 999px; background: #fffaeb; color: var(--ink);
+  box-shadow: 3px 4px 0 var(--ink); font-family: var(--font-comic), sans-serif; font-weight: 400; font-size: 17px;
+  letter-spacing: 0.05em; text-transform: uppercase; transition: transform 120ms var(--ease), box-shadow 120ms var(--ease);
+}
+#gt-app[data-theme="comic"] .gt-nav:hover { transform: translate(-1px, -2px); box-shadow: 4px 6px 0 var(--ink); color: var(--ink); }
+#gt-app[data-theme="comic"] .gt-nav[aria-current="page"] { background: #ffd84d; }
+#gt-app[data-theme="comic"] .gt-nav > span[class*="absolute"] { display: none; } /* the dark theme's sliding pill */
+#gt-app[data-theme="comic"] .gt-sidebar a[aria-label] span[class*="shadow"] { box-shadow: 3px 3px 0 var(--ink); }
+#gt-app[data-theme="comic"] .gt-sidebar a[aria-label] > span:last-child { color: #fff; text-shadow: 2px 2px 0 var(--ink); }
+#gt-app[data-theme="comic"] .gt-plan { border: 3px solid var(--ink); border-radius: 18px; box-shadow: 4px 5px 0 var(--ink); }
+
+/* top bar */
+#gt-app[data-theme="comic"] .gt-header { background: #fffaeb; border-bottom: 4px solid var(--ink); backdrop-filter: none; }
+#gt-app[data-theme="comic"] .gt-header a[href="/dashboard/billing"], #gt-app[data-theme="comic"] .gt-chip {
+  border: 2px solid var(--ink); border-radius: 999px; color: var(--ink); background: #ffd84d; box-shadow: 2px 2px 0 var(--ink);
+}
+
+/* cards: cream, thick ink border, rounded, hard shadow */
+#gt-app[data-theme="comic"] main .panel,
+#gt-app[data-theme="comic"] main [class~="bg-surface"][class~="border"],
+#gt-app[data-theme="comic"] main section[class~="border"][class~="bg-surface"] {
+  background: #fffaeb; border: 3px solid var(--ink); border-radius: 20px; box-shadow: 5px 6px 0 var(--ink);
+}
+#gt-app[data-theme="comic"] main [class~="rounded-2xl"][class~="border"] { border: 3px solid var(--ink); box-shadow: 5px 6px 0 var(--ink); }
+
+/* buttons and inputs: rounded, ink-bordered */
+#gt-app[data-theme="comic"] main button[class~="border"], #gt-app[data-theme="comic"] main a[class~="border"][class~="h-9"],
+#gt-app[data-theme="comic"] main a[class~="border"][class~="h-10"] {
+  border-width: 2px; border-color: var(--ink); border-radius: 12px; background-color: #fffaeb;
+}
+#gt-app[data-theme="comic"] main button[class~="bg-pink"], #gt-app[data-theme="comic"] [role="dialog"] button[class~="bg-pink"] {
+  border: 3px solid var(--ink); border-radius: 999px; box-shadow: 3px 4px 0 var(--ink);
+}
+#gt-app[data-theme="comic"] main button[class~="bg-white"][class~="text-black"] { border: 2px solid var(--ink); border-radius: 12px; }
+#gt-app[data-theme="comic"] main input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+#gt-app[data-theme="comic"] main textarea, #gt-app[data-theme="comic"] main select,
+#gt-app[data-theme="comic"] [role="dialog"] input:not([type="checkbox"]):not([type="range"]), #gt-app[data-theme="comic"] [role="dialog"] textarea {
+  background: #fffdf6; border: 2px solid var(--ink); border-radius: 10px;
+}
+#gt-app[data-theme="comic"] main input:focus, #gt-app[data-theme="comic"] main textarea:focus { box-shadow: 3px 3px 0 var(--pink); }
+#gt-app[data-theme="comic"] :focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+
+/* the mobile bottom bar */
+#gt-app[data-theme="comic"] nav[class~="fixed"][class~="bottom-0"] { background: #fffaeb; border-top: 4px solid var(--ink); }

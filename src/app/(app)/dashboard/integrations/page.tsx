@@ -225,7 +225,7 @@ function GoogleDriveCard() {
       {!drive.ready ? (
         <div className="mt-3 h-9 animate-pulse bg-surface-2" />
       ) : drive.connected ? (
-        <p className="mt-3 text-xs text-muted">Press <span className="text-text">Drive</span> under any clip, or <span className="text-text">Save all to Drive</span>.</p>
+        <p className="mt-3 text-xs text-muted">Press <span className="text-text">Drive</span> under any clip to save it, or <Link href="/dashboard/drive" className="text-pink underline underline-offset-2">post videos from your Drive</Link>.</p>
       ) : (
         <button onClick={connect} disabled={busy || !isLoaded} className="mt-3 inline-flex h-9 items-center gap-1.5 border border-white/25 px-3 text-sm transition-colors duration-150 hover:border-pink hover:text-pink disabled:opacity-40">
           {busy ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />} Connect Google Drive

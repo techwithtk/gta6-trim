@@ -9,7 +9,10 @@ export type Clip = {
   src?: { offset: number; dur: number }; // present = editable in the clip editor
   editing?: boolean; editAt?: number; editError?: string | null; edited?: boolean;
   v?: number; // bumps on every re-render (cache-busts the video and thumbnail)
+  text?: PostTextLite; // AI post text already written (Drive imports write it up front)
+  drive?: string; // original Google Drive file name
 };
+export type PostTextLite = { tiktok: string; youtube_title: string; youtube_description: string; instagram: string; facebook: string };
 export type Autopost = { accounts: string[]; minScore: number; gapMin: number; consent: boolean };
 export type Job = {
   id: string;
@@ -17,7 +20,7 @@ export type Job = {
   title: string;
   duration: number;
   status: "queued" | "running" | "done" | "error" | "recording" | "ended";
-  kind?: "live";
+  kind?: "live" | "drive";
   auto?: boolean; // live session started by auto-start
   platform?: "twitch" | "kick";
   login?: string;
@@ -32,6 +35,7 @@ export type Job = {
   steps: string[];
   error?: string;
   clips: Clip[];
+  failed?: { name: string; error: string }[]; // Drive imports: files that couldn't be imported
   createdAt: number; // unix seconds
 };
 
@@ -102,7 +106,7 @@ export function monthUsage(jobs: Job[]) {
   const start = new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000;
   const mine = jobs.filter((j) => (j.createdAt ?? 0) >= start);
   return {
-    videos: mine.filter((j) => j.status !== "error" && j.kind !== "live").length,
+    videos: mine.filter((j) => j.status !== "error" && j.kind !== "live" && j.kind !== "drive").length,
     clips: mine.reduce((n, j) => n + (j.clips?.length ?? 0), 0),
   };
 }

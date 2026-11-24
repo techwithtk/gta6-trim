@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { dark } from "@clerk/ui/themes";
 import "./globals.css";
 import { SOCIALS } from "@/components/SocialLinks";
+import { Tracker } from "@/components/Tracker";
 
 const ORG_JSONLD = JSON.stringify({
   "@context": "https://schema.org",
@@ -36,6 +38,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           appearance={{ theme: dark, cssLayerName: "clerk", variables: { colorPrimary: "#ff2e88", colorBackground: "#111114", borderRadius: "0.75rem" } }}
         >
           {children}
+          <Suspense fallback={null}><Tracker /></Suspense>
         </ClerkProvider>
       </body>
     </html>

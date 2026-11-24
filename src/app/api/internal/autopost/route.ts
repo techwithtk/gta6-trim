@@ -5,6 +5,7 @@ import { createPost, listAccounts, socialConfigured, SocialError } from "@/lib/b
 import { findActiveSubscription } from "@/lib/dodo";
 import { planById } from "@/lib/plans";
 import { worker } from "@/lib/worker";
+import { track } from "@/lib/track-server";
 
 export const maxDuration = 300;
 
@@ -45,6 +46,7 @@ export async function POST(req: NextRequest) {
 
     const title = String(b.title ?? "").trim().slice(0, 100) || "GTA 6 moment";
     const post = await createPost({ uid: b.uid, externalId: `${b.jobId}/${b.file}`, caption: String(b.caption ?? "").trim().slice(0, 2200) || `${title}\n\n#GTA6 #GTAVI #gaming #shorts`, title, videoUrl, accounts });
+    await track("first_post", { uid: b.uid, anon: null, props: { auto: true } });
     return NextResponse.json({ post }, { status: 201 });
   } catch (e) {
     const msg = e instanceof SocialError ? e.message : "Posting failed.";

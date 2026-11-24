@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Scissors, Radio, Plug, CreditCard, Send, Film, Moon, Sun, Palette } from "lucide-react";
-import { setTheme, useTheme } from "@/lib/theme";
+import { Scissors, Radio, Plug, CreditCard, Send, Film, Moon, Sun, Palette, Filter, FolderOpen, Sparkles } from "lucide-react";
+import { setTheme, THEMES, useTheme } from "@/lib/theme";
 import { motion, MotionConfig } from "motion/react";
 import { Ambient, EASE_OUT, SPRING } from "@/components/motion";
 import { SignOutButton } from "@clerk/nextjs";
@@ -16,11 +16,13 @@ const NAV = [
   { href: "/dashboard", label: "Make clips", icon: Scissors, short: "Make", soon: false },
   { href: "/dashboard/live", label: "Live clipping", icon: Radio, short: "Live" },
   { href: "/dashboard/clips", label: "My clips", icon: Film, short: "Clips" },
+  { href: "/dashboard/drive", label: "From Google Drive", icon: FolderOpen, short: "Drive" },
   { href: "/dashboard/posted", label: "Posted", icon: Send, short: "Posted" },
   { href: "/dashboard/brand", label: "Brand kit", icon: Palette, short: "Brand" },
   { href: "/dashboard/integrations", label: "Integrations", icon: Plug, short: "Connect" },
   { href: "/dashboard/billing", label: "Plan & billing", icon: CreditCard, short: "Plan" },
 ];
+const ADMIN_NAV = { href: "/dashboard/funnel", label: "Funnel (owner)", icon: Filter, short: "Funnel", soon: false };
 
 /** Same mark as the landing page: fluo square, ink border, hard shadow, poster wordmark. */
 function Logo() {
@@ -62,17 +64,17 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <Ambient />
       <div className="flex min-h-screen">
         {/* Sidebar */}
-        <aside className="sticky top-0 hidden h-screen w-[240px] shrink-0 flex-col border-r border-line bg-bg/80 backdrop-blur-xl md:flex">
+        <aside className="gt-sidebar sticky top-0 hidden h-screen w-[240px] shrink-0 flex-col border-r border-line bg-bg/80 backdrop-blur-xl md:flex">
           <div className="px-5 pb-7 pt-5"><Logo /></div>
           <nav className="isolate flex flex-col gap-1 px-3" aria-label="Main">
-            {NAV.map(({ href, label, icon: Icon, soon }) => {
+            {(account.admin ? [...NAV, ADMIN_NAV] : NAV).map(({ href, label, icon: Icon, soon }) => {
               const active = isActive(href);
               return (
                 <Link
                   key={href}
                   href={href}
                   aria-current={active ? "page" : undefined}
-                  className={`relative flex h-10 items-center gap-3 px-3 text-[14px] font-medium transition-colors duration-150 ${active ? "text-text" : "text-muted hover:text-text"}`}
+                  className={`gt-nav relative flex h-10 items-center gap-3 px-3 text-[14px] font-medium transition-colors duration-150 ${active ? "text-text" : "text-muted hover:text-text"}`}
                 >
                   {active ? (
                     <motion.span layoutId="nav-pill" className="absolute inset-0 -z-10 border border-white/10 bg-white/[0.06]">
@@ -87,7 +89,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             })}
           </nav>
 
-          <div className="m-3 mt-auto border border-line bg-surface p-4">
+          <div className="gt-plan m-3 mt-auto border border-line bg-surface p-4">
             <div className="flex items-center justify-between">
               <span className="font-poster text-[17px] font-black uppercase leading-none">{account.plan ? `${plan.name} plan` : "…"}</span>
               <span className="font-mono text-[10px] uppercase tracking-wider text-subtle">{account.cycle ?? ""}</span>
@@ -104,7 +106,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
         <div className="flex min-w-0 flex-1 flex-col">
           {/* Top bar */}
-          <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-line bg-bg/80 px-4 backdrop-blur-xl md:px-8">
+          <header className="gt-header sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-line bg-bg/80 px-4 backdrop-blur-xl md:px-8">
             <div className="md:hidden"><Logo /></div>
             <div className="ml-auto flex items-center gap-3">
               <ThemeToggle />
@@ -139,7 +141,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
         {/* Bottom nav (mobile) */}
         <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-7 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden" aria-label="Main">
-          {NAV.map(({ href, short, icon: Icon }) => {
+          {NAV.filter((n) => n.href !== "/dashboard/drive").map(({ href, short, icon: Icon }) => { // 7 tabs fit; Drive picking is a desktop task
             const active = isActive(href);
             return (
               <Link key={href} href={href} aria-current={active ? "page" : undefined} className={`relative flex min-h-14 flex-col items-center justify-center gap-1 text-[10px] ${active ? "text-text" : "text-subtle"}`}>
@@ -158,12 +160,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
 /** Light / dark switch for the whole dashboard (remembered in this browser). */
 function ThemeToggle() {
   const theme = useTheme();
-  const next = theme === "dark" ? "light" : "dark";
+  const next = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length];
+  const label = { comic: "Comic", dark: "Dark", light: "Light" }[next];
   return (
-    <button onClick={() => setTheme(next)} aria-label={`Switch to ${next} mode`} title={`Switch to ${next} mode`}
-      className="inline-flex h-8 items-center gap-1.5 border border-line-strong px-2.5 font-mono text-[11px] font-semibold uppercase tracking-wider text-muted hover:text-text">
-      {theme === "dark" ? <Sun className="size-3.5" /> : <Moon className="size-3.5" />}
-      <span className="hidden sm:inline">{next === "light" ? "Light" : "Dark"}</span>
+    <button onClick={() => setTheme(next)} aria-label={`Switch to ${label} theme`} title={`Switch to ${label} theme`}
+      className="gt-chip inline-flex h-8 items-center gap-1.5 border border-line-strong px-2.5 font-mono text-[11px] font-semibold uppercase tracking-wider text-muted hover:text-text">
+      {next === "comic" ? <Sparkles className="size-3.5" /> : next === "light" ? <Sun className="size-3.5" /> : <Moon className="size-3.5" />}
+      <span className="hidden sm:inline">{label}</span>
     </button>
   );
 }
