@@ -8,6 +8,7 @@ import { useUser } from "@clerk/nextjs";
 import { usePlan } from "@/lib/account";
 import { refreshDrive, refreshStorage, useDrive, useStorage, type StorageProvider } from "@/lib/drive";
 import { MAX_ACCOUNTS_PER_PLATFORM, type SocialPlatform } from "@/lib/plans";
+import { ReconnectButton } from "@/components/ReconnectButton";
 import { PLATFORM_META, refreshAccounts, useSocial, type SocialAccount } from "@/lib/social";
 
 const ORDER: SocialPlatform[] = ["tiktok", "youtube", "instagram", "facebook"];
@@ -140,7 +141,7 @@ function Integrations() {
                       <li key={a.id} className="flex items-center gap-3 border border-line bg-surface-2 px-3 py-2">
                         <span className="grid size-7 place-items-center bg-surface-3 text-[11px] font-semibold">{(a.displayName || a.username).replace(/[@.]/g, "").slice(0, 2).toUpperCase()}</span>
                         <span className="min-w-0 flex-1 truncate text-sm">{a.displayName || a.username}{a.username && a.displayName !== a.username ? <span className="ml-1.5 text-xs text-subtle">{a.username}</span> : null}</span>
-                        {!a.active ? <span className="text-xs text-orange">Reconnect</span> : <span className="hidden items-center gap-1 text-xs text-green sm:inline-flex"><Check className="size-3" /> Connected</span>}
+                        {a.needsReconnect ? <><span className="hidden text-xs text-orange sm:inline">Login expired · auto-post paused</span><ReconnectButton account={a} /></> : !a.active ? <span className="text-xs text-orange">Reconnect</span> : <span className="hidden items-center gap-1 text-xs text-green sm:inline-flex"><Check className="size-3" /> Connected</span>}
                         <button onClick={() => remove(a)} disabled={busy === a.id} className="grid size-7 place-items-center text-subtle transition-colors duration-150 hover:bg-red/10 hover:text-red" aria-label={`Disconnect ${a.displayName || a.username}`}>
                           {busy === a.id ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
                         </button>

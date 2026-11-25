@@ -207,7 +207,8 @@ function Batch({ job }: { job: Job }) {
   const clips = job.clips ?? [];
   const selected = clips.filter((c) => rowOf(c).on && rowOf(c).state !== "done");
   const spanDays = spacing * Math.max(0, selected.length - 1) / 1440;
-  const tooLong = spacing > 0 && spanDays > MAX_SCHEDULE_DAYS;
+  // the first scheduled post goes out 5 min from now, so the last one lands at 5 min + spacing × (n − 1)
+  const tooLong = spacing > 0 && 5 + spacing * Math.max(0, selected.length - 1) > MAX_SCHEDULE_DAYS * 1440 - 1;
 
   const postAll = async () => {
     setPosting(true); setSummary(null);

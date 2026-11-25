@@ -123,8 +123,8 @@ function Editor({ jobId, data, onClose }: { jobId: string; data: Data; onClose: 
       const words = Object.fromEntries(Object.entries(edits).filter(([i, v]) => v !== data.words[Number(i)][2]));
       const r = await fetch(`/api/clips/${jobId}/${data.file}/edit`, {
         method: "POST", headers: { "content-type": "application/json" },
-        // Older clips never saved their boxes: keep automatic camera detection unless the customer actually moved something.
-        body: JSON.stringify({ start, end, hook, words, stickers: stickersOn, layout: layout && (initial || !sameLayout(layout, base)) ? (layout.mode === "blur" ? { mode: "blur" } : { ...layout, cam: layout.mode === "split" ? layout.cam : null }) : null }),
+        // Untouched boxes: send nothing. The worker reuses the clip's saved boxes (or auto-detects for older clips).
+        body: JSON.stringify({ start, end, hook, words, stickers: stickersOn, layout: layout && !sameLayout(layout, base) ? (layout.mode === "blur" ? { mode: "blur" } : { ...layout, cam: layout.mode === "split" ? layout.cam : null }) : null }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error ?? "Couldn't save.");

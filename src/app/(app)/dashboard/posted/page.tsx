@@ -5,8 +5,9 @@ import Link from "next/link";
 import { AlertCircle, CalendarClock, Check, ExternalLink, Eye, Heart, Loader2, MessageCircle, RefreshCw, Repeat2, Send, Sparkles } from "lucide-react";
 import { usePlan } from "@/lib/account";
 import { useJobs, type Clip } from "@/lib/jobs";
-import { compact, PLATFORM_META, refreshOneStat, refreshPosts, refreshStats, statFor, useSocial, type PostStats, type SocialPost } from "@/lib/social";
-import { quickReason } from "@/lib/postErrors";
+import { compact, PLATFORM_META, refreshOneStat, refreshPosts, refreshStats, statFor, useSocial, type PostStats, type SocialAccount, type SocialPost } from "@/lib/social";
+import { isAuthError, quickReason, reconnectText } from "@/lib/postErrors";
+import { ReconnectButton } from "@/components/ReconnectButton";
 import { PostModal } from "@/components/PostModal";
 import { Insights } from "@/components/Insights";
 import { RepostCard } from "@/components/RepostCard";
@@ -45,7 +46,7 @@ export default function PostedPage() {
     for (const j of jobs) for (const c of j.clips ?? []) m.set(`${j.id}/${c.file}`, { jobId: j.id, clip: c });
     return m;
   }, [jobs]);
-  const accountName = (id?: string) => social.accounts.find((a) => a.id === id)?.displayName;
+  const accountOf = (id?: string) => social.accounts.find((a) => a.id === id);
 
   const counts = useMemo(() => {
     const out = Object.fromEntries(ORDER.map((p) => [p, { published: 0, scheduled: 0, publishing: 0, failed: 0, views: 0 }])) as Record<SocialPlatform, Record<Status | "views", number>>;
@@ -168,7 +169,7 @@ export default function PostedPage() {
       ) : (
         <ul className="space-y-3">
           {visible.map((p) => (
-            <PostRow key={p.id} post={p} info={p.externalId ? clips.get(p.externalId) : undefined} platform={platform} accountName={accountName} stats={stats}
+            <PostRow key={p.id} post={p} info={p.externalId ? clips.get(p.externalId) : undefined} platform={platform} accountOf={accountOf} stats={stats}
               onRetry={(x) => setRetry(x)} />
           ))}
         </ul>
@@ -201,9 +202,9 @@ function Stat({ n, label, bad, big }: { n: number; label: string; bad?: boolean;
   );
 }
 
-function PostRow({ post, info, platform, accountName, onRetry, stats }: {
+function PostRow({ post, info, platform, accountOf, onRetry, stats }: {
   post: SocialPost; info?: { jobId: string; clip: Clip }; platform: SocialPlatform | "all"; stats: Record<string, PostStats>;
-  accountName: (id?: string) => string | undefined; onRetry: (x: { jobId: string; clip: Clip }) => void;
+  accountOf: (id?: string) => SocialAccount | undefined; onRetry: (x: { jobId: string; clip: Clip }) => void;
 }) {
   const parts = post.platforms.filter((x) => platform === "all" || x.platform === platform);
   const failed = parts.some((x) => norm(x.status) === "failed");
@@ -232,7 +233,7 @@ function PostRow({ post, info, platform, accountName, onRetry, stats }: {
             ) : null}
           </div>
           <ul className="mt-2.5 space-y-2">
-            {parts.map((x, i) => <PlatformLine key={i} part={x} name={accountName(x.accountId)} stat={statFor(stats, x.postId, x.platform)} />)}
+            {parts.map((x, i) => <PlatformLine key={i} part={x} account={accountOf(x.accountId)} stat={statFor(stats, x.postId, x.platform)} />)}
           </ul>
         </div>
       </div>
@@ -240,10 +241,12 @@ function PostRow({ post, info, platform, accountName, onRetry, stats }: {
   );
 }
 
-function PlatformLine({ part, name, stat }: { part: SocialPost["platforms"][number]; name?: string; stat?: PostStats }) {
+function PlatformLine({ part, account, stat }: { part: SocialPost["platforms"][number]; account?: SocialAccount; stat?: PostStats }) {
+  const name = account?.displayName;
   const s = norm(part.status);
   const m = PLATFORM_META[part.platform as SocialPlatform];
   const quick = s === "failed" ? quickReason(part.error) : null;
+  const authFail = s === "failed" && isAuthError(part.error);
   const [ai, setAi] = useState<{ reason: string; fix: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -272,7 +275,16 @@ function PlatformLine({ part, name, stat }: { part: SocialPost["platforms"][numb
       </div>
       {s === "failed" ? (
         <div className="ml-7 mt-1.5 border-l-2 border-red/50 pl-3 text-xs">
-          {ai ? (
+          {authFail ? (
+            account && !account.needsReconnect ? (
+              <p className="text-text">The {m?.name ?? "platform"} login had expired. It&apos;s working again now, so use Post again.</p>
+            ) : (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                <p className="font-medium text-text">{reconnectText(m?.name ?? "account")} Auto-post to it is paused until then.</p>
+                {account ? <ReconnectButton account={account} /> : <Link href="/dashboard/integrations" className="font-semibold text-pink hover:underline">Open Integrations</Link>}
+              </div>
+            )
+          ) : ai ? (
             <>
               <p className="text-text"><span className="text-subtle">Why: </span>{ai.reason}</p>
               <p className="mt-0.5 text-text"><span className="text-subtle">Fix: </span>{ai.fix}</p>
@@ -285,8 +297,8 @@ function PlatformLine({ part, name, stat }: { part: SocialPost["platforms"][numb
           ) : (
             <p className="text-text">{part.error ? "The platform rejected this post." : "The platform didn't say why."}</p>
           )}
-          {part.error ? <p className="mt-1 break-words font-mono text-[10.5px] text-subtle">Platform said: {part.error.slice(0, 300)}</p> : null}
-          {part.error && !ai ? (
+          {part.error && !authFail ? <p className="mt-1 break-words font-mono text-[10.5px] text-subtle">Platform said: {part.error.slice(0, 300)}</p> : null}
+          {part.error && !ai && !authFail ? (
             <button onClick={explain} disabled={busy} className="mt-1.5 inline-flex items-center gap-1 font-mono text-[10.5px] font-bold uppercase tracking-wider text-pink hover:underline disabled:opacity-50">
               {busy ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />} Explain with AI
             </button>

@@ -11,6 +11,12 @@ const RULES: { re: RegExp; reason: string; fix: string }[] = [
   { re: /download|fetch|url|media|file/i, reason: "The posting service couldn't download the video.", fix: "Retry the post. If the clip is older than 7 days, re-render it in the editor first." },
 ];
 
+/** True when the platform rejected the login itself (expired/revoked token), so retrying can't work until a reconnect. */
+export const AUTH_ERROR = /auth\/session|(token|session|access|credential|login|authori[sz]ation)\W{0,3}(\w+\W+){0,2}(expired|invalid|revoked)|(expired|invalid|revoked)\W{0,3}(\w+\W+){0,2}(token|session|credential|grant)|re-?auth|unauthori[sz]ed|invalid_grant|login required|sign.?in again|\b401\b|code\W{0,3}190\b/i;
+export const isAuthError = (error?: string | null) => !!error && AUTH_ERROR.test(error);
+export const PLATFORM_NAME: Record<string, string> = { tiktok: "TikTok", youtube: "YouTube", instagram: "Instagram", facebook: "Facebook" };
+export const reconnectText = (platform: string) => `Your ${platform} connection expired. Reconnect it to keep posting.`;
+
 export function quickReason(error?: string): { reason: string; fix: string } | null {
   if (!error) return null;
   return RULES.find((r) => r.re.test(error)) ?? null;

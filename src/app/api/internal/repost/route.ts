@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { activePlan, fromWorker } from "@/lib/autopost-server";
+import { PLATFORM_NAME } from "@/lib/postErrors";
 import { createPost, listAccounts, listPosts, postStats, socialConfigured, SocialError } from "@/lib/bundle";
 import { pickWinner } from "@/lib/repost";
 import { limitsFor, worker } from "@/lib/worker";
@@ -24,11 +25,14 @@ export async function POST(req: NextRequest) {
     const ids = new Set(b.accounts ?? []);
     const accounts = (await listAccounts(b.uid)).filter((a) => a.slot <= limits.accountsPerPlatform && a.active && ids.has(a.id))
       .filter((a) => a.platform !== "tiktok" || b.consent);
+    const paused = accounts.filter((a) => a.needsReconnect);
+    const live = accounts.filter((a) => !a.needsReconnect);
+    if (accounts.length && !live.length) return NextResponse.json({ posted: null, message: `Paused: ${paused.map((a) => PLATFORM_NAME[a.platform]).join(", ")} connection expired. Reconnect it in Integrations.` });
     if (!accounts.length) return NextResponse.json({ posted: null, message: "None of the chosen accounts are connected anymore." });
 
     const posts = await listPosts(b.uid);
     const stats = await postStats(posts);
-    const pick = pickWinner({ posts, stats, done: new Set(b.done ?? []), multiple: Number(b.multiple) || 3, delayDays: Number(b.delayDays) || 3, accounts: accounts.map((a) => a.id) });
+    const pick = pickWinner({ posts, stats, done: new Set(b.done ?? []), multiple: Number(b.multiple) || 3, delayDays: Number(b.delayDays) || 3, accounts: live.map((a) => a.id) });
     if ("reason" in pick) return NextResponse.json({ posted: null, message: pick.reason });
 
     const [jobId, file] = pick.externalId.split("/");
@@ -45,7 +49,7 @@ export async function POST(req: NextRequest) {
     const videoUrl = fr && fr.ok ? ((await fr.json()) as { url?: string }).url : undefined;
     if (!videoUrl) return NextResponse.json({ posted: null, message: "The winning clip has expired from storage." });
 
-    const chosen = accounts.filter((a) => pick.accounts.includes(a.id));
+    const chosen = live.filter((a) => pick.accounts.includes(a.id));
     await createPost({ uid: b.uid, externalId: pick.externalId, caption, title, videoUrl, accounts: chosen });
     return NextResponse.json({ posted: pick.externalId, title, message: `Reposted (${pick.views} views vs your usual ${pick.usual}).` }, { status: 201 });
   } catch (e) {

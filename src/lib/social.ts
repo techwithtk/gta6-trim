@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from "react";
 import type { SocialPlatform } from "@/lib/plans";
 
-export type SocialAccount = { id: string; platform: SocialPlatform; username: string; displayName: string; active: boolean };
+export type SocialAccount = { id: string; platform: SocialPlatform; username: string; displayName: string; active: boolean; needsReconnect?: boolean };
 export type SocialPost = {
   id: string;
   status: string;

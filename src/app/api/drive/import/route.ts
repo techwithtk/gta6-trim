@@ -2,7 +2,6 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireStudio } from "@/lib/social-server";
 import { driveToken } from "@/lib/drive-server";
 import { worker } from "@/lib/worker";
-import { trialCapError } from "@/lib/trial-server";
 import { track } from "@/lib/track-server";
 
 const MAX_FILES = 20;
@@ -22,8 +21,6 @@ export async function POST(req: NextRequest) {
   const trial = !!r.s.trialEndsAt && Date.now() < r.s.trialEndsAt;
   const max = trial ? TRIAL_MAX_FILES : MAX_FILES;
   if (files.length > max) return NextResponse.json({ error: trial ? `During the free trial you can import up to ${TRIAL_MAX_FILES} videos at a time.` : `Pick up to ${MAX_FILES} videos at a time.` }, { status: 400 });
-  const capped = await trialCapError(r.s.uid, r.s.trialEndsAt, "video");
-  if (capped) return NextResponse.json({ error: capped }, { status: 429 });
 
   const token = await driveToken(r.s.self ?? r.s.uid);
   if (!token) return NextResponse.json({ error: "Connect Google Drive first (Integrations page)." }, { status: 400 });
@@ -31,10 +28,16 @@ export async function POST(req: NextRequest) {
   try {
     const jobs = (await (await worker(`/jobs?uid=${encodeURIComponent(r.s.uid)}`)).json()) as J[];
     const day = Date.now() / 1000 - 86400;
+    if (trial && r.s.trialEndsAt) { // the free trial includes 1 Drive import (up to 3 videos), separate from its YouTube allowance
+      const since = (r.s.trialEndsAt - 86400_000) / 1000 - 60;
+      if (jobs.some((j) => j.kind === "drive" && (j.createdAt ?? 0) >= since && j.status !== "error")) {
+        return NextResponse.json({ error: "Your free trial includes 1 Google Drive import. Your plan starts automatically when the trial ends." }, { status: 429 });
+      }
+    }
     if (jobs.filter((j) => j.kind === "drive" && (j.createdAt ?? 0) >= day && j.status !== "error").length >= PER_DAY) {
       return NextResponse.json({ error: `You can start ${PER_DAY} Google Drive imports a day. Try again tomorrow.` }, { status: 429 });
     }
-    const res = await worker("/drive/import", { method: "POST", body: JSON.stringify({ uid: r.s.uid, files, notes: String(b.notes ?? "").slice(0, 400), token }) });
+    const res = await worker("/drive/import", { method: "POST", body: JSON.stringify({ uid: r.s.uid, tokenUid: r.s.self ?? r.s.uid, files, notes: String(b.notes ?? "").slice(0, 400), token }) });
     const d = await res.json();
     if (res.ok) await track("first_clip", { uid: r.s.uid, props: { kind: "drive", files: files.length } });
     return NextResponse.json(d, { status: res.status });

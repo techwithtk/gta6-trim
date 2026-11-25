@@ -26,7 +26,7 @@ export function PostModal({ target, accounts, posts, onClose }: { target: { jobI
 }
 
 function PostForm({ jobId, clip, accounts, posts, onClose }: { jobId: string; clip: Clip; accounts: SocialAccount[]; posts: SocialPost[]; onClose: () => void }) {
-  const [picked, setPicked] = useState<Set<string>>(() => new Set(accounts.filter((a) => a.active).map((a) => a.id)));
+  const [picked, setPicked] = useState<Set<string>>(() => new Set(accounts.filter((a) => a.active && !a.needsReconnect).map((a) => a.id)));
   const [caption, setCaption] = useState(() => defaultCaption(clip));
   const [title, setTitle] = useState(clip.title);
   const [when, setWhen] = useState<"now" | "later">("now");
@@ -118,7 +118,9 @@ function PostForm({ jobId, clip, accounts, posts, onClose }: { jobId: string; cl
                   <input type="checkbox" checked={on} onChange={() => toggle(a.id)} className="size-4 accent-[var(--pink)]" />
                   <span className="grid size-6 shrink-0 place-items-center text-[11px] font-bold text-white" style={{ background: m.color }}>{m.letter}</span>
                   <span className="min-w-0 flex-1 truncate">{a.displayName || a.username}</span>
+                  {a.needsReconnect ? <span className="shrink-0 text-[11px] text-orange">Login expired</span> : null}
                 </label>
+                {a.needsReconnect ? <p className="mt-1 text-[11px] text-subtle">Your {m.name} connection expired. <Link href="/dashboard/integrations" className="text-pink hover:underline">Reconnect it</Link></p> : null}
               </li>
             );
           })}

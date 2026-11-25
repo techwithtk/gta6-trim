@@ -17,7 +17,7 @@ export async function trialCapError(uid: string, trialEndsAt: number | undefined
   if (kind === "live" && mine.filter((j) => j.kind === "live").length >= TRIAL.liveSessions) {
     return `Your free trial includes ${TRIAL.liveSessions} live sessions, and you've used them all. Your plan starts automatically when the trial ends.`;
   }
-  if (kind === "video" && mine.filter((j) => j.kind !== "live").length >= TRIAL.videos) {
+  if (kind === "video" && mine.filter((j) => j.kind !== "live" && j.kind !== "drive").length >= TRIAL.videos) {
     return `Your free trial includes ${TRIAL.videos} YouTube videos, and you've used them both. Your plan starts automatically when the trial ends.`;
   }
   return null;

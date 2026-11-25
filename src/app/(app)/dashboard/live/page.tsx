@@ -397,11 +397,18 @@ function AutoPostLine({ j, accounts, onOff }: { j: Job; accounts: SocialAccount[
   const last = j.autopostLast;
   if (!a && !last) return null;
   const names = a ? a.accounts.map((id) => accounts.find((x) => x.id === id)?.displayName).filter(Boolean) : [];
+  const expired = a ? accounts.filter((x) => x.needsReconnect && a.accounts.includes(x.id)) : [];
   return (
     <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line pt-3 text-xs">
       <span className={`inline-flex items-center gap-1.5 font-mono text-[10.5px] font-bold uppercase tracking-wider ${a ? "text-pink" : "text-subtle"}`}><Send className="size-3" /> Auto-post {a ? "on" : "off"}</span>
       {a ? <span className="text-muted">{names.length ? names.join(", ") : `${a.accounts.length} account${a.accounts.length > 1 ? "s" : ""}`} · score {(a.minScore * 10).toFixed(1)}+ · {GAPS.find((g) => g.v === a.gapMin)?.label ?? `every ${a.gapMin} min`}</span> : null}
       {last ? <span className={last.ok ? "text-green" : "text-red"}>{last.ok ? `Last sent: ${last.title}` : `Last post failed: ${last.error ?? "unknown error"}`}</span> : null}
+      {a && expired.length ? (
+        <span className="inline-flex items-center gap-2 text-orange">
+          Your {expired.map((x) => PLATFORM_META[x.platform].name).join(" and ")} connection expired. Auto-post to it is paused.
+          <Link href="/dashboard/integrations" className="font-semibold text-pink hover:underline">Reconnect it</Link>
+        </span>
+      ) : null}
       {a && j.status === "recording" ? <button onClick={onOff} className="ml-auto font-mono text-[10.5px] font-bold uppercase tracking-wider text-muted hover:text-red">Turn off</button> : null}
     </div>
   );

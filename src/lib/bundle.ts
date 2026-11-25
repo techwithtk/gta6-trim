@@ -1,5 +1,6 @@
 import "server-only";
 import type { SocialPlatform } from "@/lib/plans";
+import { isAuthError } from "@/lib/postErrors";
 
 /**
  * bundle.social posting API. A bundle.social "team" holds ONE account per platform, so each GTA6 Trim customer gets up
@@ -59,8 +60,8 @@ async function createSlot(uid: string, n: number): Promise<string> {
 
 /* ------------------------------------------------------------------ accounts */
 
-export type SocialAccount = { id: string; platform: SocialPlatform; username: string; displayName: string; active: boolean; slot: number };
-type RawAccount = { id: string; type: string; teamId: string; username?: string | null; displayName?: string | null; deleteOn?: string | null; channels?: { id: string; name?: string | null; username?: string | null }[] | null };
+export type SocialAccount = { id: string; platform: SocialPlatform; username: string; displayName: string; active: boolean; slot: number; needsReconnect?: boolean };
+type RawAccount = { id: string; type: string; teamId: string; username?: string | null; displayName?: string | null; deleteOn?: string | null; updatedAt?: string | null; createdAt?: string | null; channels?: { id: string; name?: string | null; username?: string | null }[] | null };
 
 /** Account ids are "<teamId>~<TYPE>" because bundle.social disconnects and posts by team + platform. */
 const accountId = (teamId: string, type: string) => `${teamId}~${type}`;
@@ -71,23 +72,39 @@ export const parseAccountId = (id: string) => {
 
 export async function listAccounts(uid: string): Promise<SocialAccount[]> {
   const mine = await slots(uid);
-  const teams = await Promise.all(mine.map((s) => b<{ socialAccounts?: RawAccount[] }>(`/team/${s.id}`).then((t) => ({ s, t }))));
-  return teams.flatMap(({ s, t }) =>
+  const teams = await Promise.all(mine.map((s) => Promise.all([
+    b<{ socialAccounts?: RawAccount[] }>(`/team/${s.id}`),
+    b<{ items?: RawPost[] }>(`/post/?teamId=${s.id}&orderBy=createdAt&order=DESC&limit=25`).then((d) => d.items ?? []).catch(() => [] as RawPost[]),
+  ]).then(([t, posts]) => ({ s, t, posts }))));
+  return teams.flatMap(({ s, t, posts }) =>
     (t.socialAccounts ?? [])
       .filter((a) => PLATFORM_OF[a.type])
       .map((a) => {
         const ch = a.channels?.[0];
         const name = a.displayName || ch?.name || a.username || PLATFORM_OF[a.type];
-        return { id: accountId(s.id, a.type), platform: PLATFORM_OF[a.type], username: a.username || ch?.username || "", displayName: name, active: !a.deleteOn, slot: s.n };
+        return { id: accountId(s.id, a.type), platform: PLATFORM_OF[a.type], username: a.username || ch?.username || "", displayName: name, active: !a.deleteOn, slot: s.n, needsReconnect: loginRejected(a, posts) };
       }),
   );
 }
 
-/** Hosted connect link for the first slot without this platform (adds a slot if needed, up to the plan's cap). */
-export async function connectUrl(uid: string, platform: SocialPlatform, perPlatform: number, redirectUrl: string): Promise<string> {
+/**
+ * The platform rejected this account's login: its latest finished post failed with an auth error, after the account was last (re)connected.
+ * Reconnecting refreshes the account's updatedAt, which clears this on its own.
+ */
+function loginRejected(a: RawAccount, posts: RawPost[]): boolean {
+  const since = a.updatedAt ?? a.createdAt ?? "";
+  const last = posts.find((p) => p.data && a.type in p.data && (p.errors?.[a.type] || p.status === "POSTED" || p.status === "ERROR"));
+  if (!last || (last.createdAt ?? "") <= since) return false;
+  return isAuthError(last.errors?.[a.type] ?? (last.status === "ERROR" ? last.error : null));
+}
+
+/** Hosted connect link for the first slot without this platform (or, with reconnectId, that account's own slot to log in again) (adds a slot if needed, up to the plan's cap). */
+export async function connectUrl(uid: string, platform: SocialPlatform, perPlatform: number, redirectUrl: string, reconnectId?: string): Promise<string> {
   const mine = await slots(uid);
-  const taken = new Set((await listAccounts(uid)).filter((a) => a.platform === platform).map((a) => parseAccountId(a.id)!.teamId));
-  let teamId = mine.filter((s) => s.n <= perPlatform).find((s) => !taken.has(s.id))?.id;
+  const again = reconnectId ? parseAccountId(reconnectId) : null;
+  if (reconnectId && (!again || again.platform !== platform || !mine.some((s) => s.id === again.teamId))) throw new SocialError("Account not found.", 404);
+  const taken = again ? new Set<string>() : new Set((await listAccounts(uid)).filter((a) => a.platform === platform).map((a) => parseAccountId(a.id)!.teamId));
+  let teamId = again?.teamId ?? mine.filter((s) => s.n <= perPlatform).find((s) => !taken.has(s.id))?.id;
   if (!teamId) {
     const used = new Set(mine.map((s) => s.n));
     const n = Array.from({ length: perPlatform }, (_, i) => i + 1).find((k) => !used.has(k));

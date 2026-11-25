@@ -30,7 +30,7 @@ export function TrialBanner() {
   const since = (end - TRIAL.days * 86400_000) / 1000 - 60;
   const mine = jobs.filter((j) => j.createdAt >= since && j.status !== "error");
   const live = mine.filter((j) => j.kind === "live").length;
-  const videos = mine.filter((j) => j.kind !== "live").length;
+  const videos = mine.filter((j) => j.kind !== "live" && j.kind !== "drive").length;
   const price = account.cycle === "yearly" ? `$${plan.yearly * 12}/year` : `$${plan.monthly}/month`;
   const soon = left < 6 * 3_600_000;
 
