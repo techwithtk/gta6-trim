@@ -158,7 +158,7 @@ export function CheckoutForm({ live }: { live: boolean }) {
               <input type="checkbox" checked={trial} onChange={(e) => setTrial(e.target.checked)} className="mt-0.5 size-4 accent-[var(--pink)]" />
               <span>
                 <span className="font-bold">Try it free for {TRIAL.days === 1 ? "1 day" : `${TRIAL.days} days`}</span>
-                <span className="block text-xs text-muted">{TRIAL.liveSessions} live sessions + {TRIAL.videos} YouTube videos, with every {plan.name} feature. Card needed to verify, $0 today.</span>
+                <span className="block text-xs text-muted">{TRIAL.liveSessions} live sessions (up to {TRIAL.liveHours} hours) + {TRIAL.videos} YouTube videos, with every {plan.name} feature. Card needed to verify, $0 today.</span>
               </span>
             </label>
           ) : null}

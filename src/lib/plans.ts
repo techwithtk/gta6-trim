@@ -9,7 +9,7 @@ export type StorageProvider = "gdrive" | "dropbox" | "onedrive" | "box";
 export const MAX_ACCOUNTS_PER_PLATFORM = 3;
 
 /** Free trial: card required, $0 today, the plan starts (and is charged) after TRIAL.days unless cancelled. One per account. */
-export const TRIAL = { days: 1, liveSessions: 2, videos: 2 } as const; // same caps on every plan, Studio included
+export const TRIAL = { days: 1, liveSessions: 2, liveHours: 3, videos: 2 } as const; // same caps on every plan, Studio included
 
 export type Plan = {
   id: PlanId;
@@ -20,6 +20,7 @@ export type Plan = {
   highlight?: boolean;
   limits: {
     liveSessions: number; // streams clipped at the same time
+    liveHours: number; // hours of live recording per calendar month (UTC), all sessions together
     ytImports: number; // YouTube long-form links per month
     ytMaxMinutes: number; // max length per imported video
     clips: number; // clips per month
@@ -39,10 +40,11 @@ export const PLANS: Plan[] = [
     blurb: "For new clippers getting their first pages growing.",
     monthly: 49,
     yearly: 39,
-    limits: { liveSessions: 2, ytImports: 20, ytMaxMinutes: 120, clips: 200, autopost: false, accountsPerPlatform: 0, storage: ["gdrive"], captionStyles: 4, seats: 1 },
+    limits: { liveSessions: 2, liveHours: 60, ytImports: 20, ytMaxMinutes: 120, clips: 200, autopost: false, accountsPerPlatform: 0, storage: ["gdrive"], captionStyles: 4, seats: 1 },
     features: [
       "Live GTA 6 directory · Twitch & Kick (YouTube Live soon)",
       "2 live streams clipped at once",
+      "60 hours of live clipping / month",
       "20 YouTube long-form videos / month (up to 2h each)",
       "200 clips / month · 1080p, no watermark",
       "AI captions · 4 styles",
@@ -57,10 +59,11 @@ export const PLANS: Plan[] = [
     monthly: 99,
     yearly: 79,
     highlight: true,
-    limits: { liveSessions: 5, ytImports: 60, ytMaxMinutes: 240, clips: 600, autopost: false, accountsPerPlatform: 0, storage: ["gdrive", "dropbox", "onedrive"], captionStyles: 8, seats: 1 },
+    limits: { liveSessions: 5, liveHours: 150, ytImports: 60, ytMaxMinutes: 240, clips: 600, autopost: false, accountsPerPlatform: 0, storage: ["gdrive", "dropbox", "onedrive"], captionStyles: 8, seats: 1 },
     features: [
       "Everything in Starter",
       "5 live streams clipped at once",
+      "150 hours of live clipping / month",
       "60 YouTube long-form videos / month (up to 4h each)",
       "600 clips / month",
       "AI captions · all 8 styles + brand colors",
@@ -74,10 +77,11 @@ export const PLANS: Plan[] = [
     blurb: "For teams and agencies running many pages.",
     monthly: 199,
     yearly: 159,
-    limits: { liveSessions: 10, ytImports: 200, ytMaxMinutes: 360, clips: 2000, autopost: true, accountsPerPlatform: 3, storage: ["gdrive", "dropbox", "onedrive", "box"], captionStyles: 8, seats: 3 },
+    limits: { liveSessions: 10, liveHours: 400, ytImports: 200, ytMaxMinutes: 360, clips: 2000, autopost: true, accountsPerPlatform: 3, storage: ["gdrive", "dropbox", "onedrive", "box"], captionStyles: 8, seats: 3 },
     features: [
       "Everything in Pro",
       "10 live streams clipped at once",
+      "400 hours of live clipping / month",
       "200 YouTube long-form videos / month (up to 6h each)",
       "2,000 clips / month · priority processing",
       "Auto-post + scheduling to TikTok, YouTube Shorts, Instagram Reels & Facebook · 3 accounts each",
@@ -107,6 +111,7 @@ export const planById = (id: PlanId) => PLANS.find((p) => p.id === id)!;
 export const COMPARISON: { label: string; values: (p: Plan) => string | boolean }[] = [
   { label: "Live stream directory", values: () => true },
   { label: "Live streams clipped at once", values: (p) => `${p.limits.liveSessions}` },
+  { label: "Live clipping hours / month", values: (p) => `${p.limits.liveHours}h` },
   { label: "YouTube long-form imports / month", values: (p) => `${p.limits.ytImports}` },
   { label: "Max video length", values: (p) => `${p.limits.ytMaxMinutes / 60}h` },
   { label: "Clips / month", values: (p) => p.limits.clips.toLocaleString("en-US") },

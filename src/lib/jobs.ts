@@ -29,6 +29,7 @@ export type Job = {
   processed?: number;
   stop?: boolean;
   endedAt?: number;
+  endReason?: string; // "ended" | "stopped" | "time limit" | "hours used" | "lost"
   autopost?: Autopost | null;
   autopostLast?: { file: string; title: string; at: number; ok: boolean; error?: string | null };
   step: number;

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { activeSub, checkAutopost, fromWorker, type AutopostIn } from "@/lib/autopost-server";
 import { trialCapError } from "@/lib/trial-server";
 import { brandCapsFor, limitsFor, worker } from "@/lib/worker";
+import { liveBudget } from "@/lib/live-budget";
 
 export const maxDuration = 150;
 
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
     const autopost = "autopost" in ap ? ap.autopost : undefined;
     const res = await worker("/live", {
       method: "POST",
-      body: JSON.stringify({ uid: b.uid, login: b.login, platform: b.platform === "kick" ? "kick" : "twitch", maxLive: limits.liveSessions, autopost, brandCaps: brandCapsFor(plan), auto: true }),
+      body: JSON.stringify({ uid: b.uid, login: b.login, platform: b.platform === "kick" ? "kick" : "twitch", maxLive: limits.liveSessions, autopost, brandCaps: brandCapsFor(plan), auto: true, budget: liveBudget(plan, sub.trialEndsAt) }),
       signal: AbortSignal.timeout(120_000),
     });
     return NextResponse.json(await res.json(), { status: res.ok ? 201 : res.status });

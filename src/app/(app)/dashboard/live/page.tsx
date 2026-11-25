@@ -148,6 +148,7 @@ export default function LivePage() {
           <span className="num block font-poster text-[28px] font-black leading-none text-text">{active.length}<span className="text-subtle"> / {slots}</span></span>
           live slots in use
           <div className="mt-1.5 flex gap-1">{Array.from({ length: slots }, (_, i) => <span key={i} className={`h-1.5 w-5 ${i < active.length ? "bg-pink" : "bg-white/10"}`} />)}</div>
+          <LiveHours recording={active.length} />
         </div>
       </div>
 
@@ -419,7 +420,7 @@ function Session({ j, now, accounts, onAutoOff, onStop, onPlay }: { j: Job; now:
   const chunks = j.chunks ?? 0, processed = j.processed ?? 0;
   const finishing = !recording && processed < chunks;
   const endMs = j.endedAt ? j.endedAt * 1000 : now ?? 0;
-  const status = recording ? (j.stop ? "Stopping…" : "Recording") : finishing ? "Finishing last clips" : "Ended";
+  const status = recording ? (j.stop ? "Stopping…" : "Recording") : finishing ? "Finishing last clips" : j.endReason === "hours used" ? "Ended · live hours used up" : "Ended";
   const sub = recording
     ? chunks === 0 ? "Recording the first 10 minutes. First clips in about 12–15 min." : `${chunks} chunk${chunks > 1 ? "s" : ""} recorded · ${processed} clipped`
     : `${chunks} chunk${chunks === 1 ? "" : "s"} recorded · ${processed} clipped`;
@@ -470,5 +471,33 @@ function Session({ j, now, accounts, onAutoOff, onStop, onPlay }: { j: Job; now:
         </div>
       ) : null}
     </article>
+  );
+}
+
+type Usage = { usedSec: number; limitSec: number; label: string; resetsAt: number | null };
+
+/** Live hours used against the plan's monthly allowance (or the trial's). Refreshes every minute while something is recording. */
+function LiveHours({ recording }: { recording: number }) {
+  const [u, setU] = useState<Usage | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const load = () => fetch("/api/live/usage", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((d) => { if (alive && d) setU(d); }).catch(() => {});
+    const first = setTimeout(load, 0);
+    const t = recording ? setInterval(load, 60_000) : null;
+    return () => { alive = false; clearTimeout(first); if (t) clearInterval(t); };
+  }, [recording]);
+  if (!u || !u.limitSec) return null;
+  const used = u.usedSec / 3600, limit = u.limitSec / 3600, pct = Math.min(100, (u.usedSec / u.limitSec) * 100);
+  const out = pct >= 100, low = pct >= 80;
+  const resets = u.resetsAt ? new Date(u.resetsAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : null;
+  return (
+    <div className="mt-3 normal-case tracking-normal">
+      <span className="num font-mono text-[11px] uppercase tracking-wider">
+        <span className={out ? "text-red" : low ? "text-orange" : "text-text"}>{used < 10 ? used.toFixed(1) : Math.round(used)}h</span> / {Math.round(limit)}h live hours {u.label}
+      </span>
+      <div className="mt-1 h-1.5 w-40 bg-white/10"><div className={`h-full ${out ? "bg-red" : low ? "bg-orange" : "bg-pink"}`} style={{ width: `${pct}%` }} /></div>
+      {out ? <p className="mt-1 max-w-[16rem] text-xs text-red">All used. New sessions start again {resets ? `on ${resets}` : "when your plan starts"}, or upgrade for more hours.</p>
+        : low && resets ? <p className="mt-1 text-xs text-orange">Resets {resets}.</p> : null}
+    </div>
   );
 }

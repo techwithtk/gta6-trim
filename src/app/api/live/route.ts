@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { limitsFor, brandCapsFor, requirePlan, worker } from "@/lib/worker";
 import { checkAutopost, type AutopostIn } from "@/lib/autopost-server";
 import { track } from "@/lib/track-server";
+import { liveBudget } from "@/lib/live-budget";
 
 /** Start clipping a live Twitch or Kick stream. The plan's live-slot limit is enforced by the worker against your active sessions. */
 export async function POST(req: NextRequest) {
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
   try {
     const res = await worker("/live", {
       method: "POST",
-      body: JSON.stringify({ uid: r.s.uid, login: body.login, platform: body.platform === "kick" ? "kick" : "twitch", maxLive: limits.liveSessions, autopost, brandCaps: brandCapsFor(r.s.plan) }),
+      body: JSON.stringify({ uid: r.s.uid, login: body.login, platform: body.platform === "kick" ? "kick" : "twitch", maxLive: limits.liveSessions, autopost, brandCaps: brandCapsFor(r.s.plan), budget: liveBudget(r.s.plan, r.s.trialEndsAt) }),
       signal: AbortSignal.timeout(120_000),
     });
     const d = await res.json();
