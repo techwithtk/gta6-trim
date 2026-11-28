@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { activePlan, fromWorker } from "@/lib/autopost-server";
 import { PLATFORM_NAME } from "@/lib/postErrors";
-import { createPost, listAccounts, listPosts, postStats, socialConfigured, SocialError } from "@/lib/bundle";
+import { createPost, DAILY_POST_CAP, postsLast24h, listAccounts, listPosts, postStats, socialConfigured, SocialError } from "@/lib/bundle";
 import { pickWinner } from "@/lib/repost";
 import { limitsFor, worker } from "@/lib/worker";
 
@@ -49,7 +49,9 @@ export async function POST(req: NextRequest) {
     const videoUrl = fr && fr.ok ? ((await fr.json()) as { url?: string }).url : undefined;
     if (!videoUrl) return NextResponse.json({ posted: null, message: "The winning clip has expired from storage." });
 
-    const chosen = live.filter((a) => pick.accounts.includes(a.id));
+    const sent = postsLast24h(posts);
+    const chosen = live.filter((a) => pick.accounts.includes(a.id) && (sent.get(a.id) ?? 0) < DAILY_POST_CAP);
+    if (!chosen.length) return NextResponse.json({ posted: null, message: `Skipped today: the accounts already posted ${DAILY_POST_CAP} times in the last 24 hours (the daily limit).` });
     await createPost({ uid: b.uid, externalId: pick.externalId, caption, title, videoUrl, accounts: chosen });
     return NextResponse.json({ posted: pick.externalId, title, message: `Reposted (${pick.views} views vs your usual ${pick.usual}).` }, { status: 201 });
   } catch (e) {

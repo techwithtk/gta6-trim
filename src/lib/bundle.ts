@@ -204,11 +204,23 @@ export async function createPost(i: PostInput): Promise<PostResult> {
         if (a.platform === "instagram") data.INSTAGRAM = { type: "REEL", text: i.caption.slice(0, 2200), uploadIds, shareToFeed: true };
         if (a.platform === "facebook") data.FACEBOOK = { type: "REEL", text: i.caption.slice(0, 5000), uploadIds };
       }
-      return b<RawPost>("/post/", {
-        method: "POST",
-        body: JSON.stringify({ teamId, title: i.title.slice(0, 100) || "GTA 6 clip", referenceKey: `${ref}~${n}`, postDate, status: "SCHEDULED", socialAccountTypes: accts.map((a) => TYPE[a.platform]), data }),
-        signal: AbortSignal.timeout(60_000),
-      });
+      const key = `${ref}~${n}`;
+      try {
+        return await b<RawPost>("/post/", {
+          method: "POST",
+          body: JSON.stringify({ teamId, title: i.title.slice(0, 100) || "GTA 6 clip", referenceKey: key, postDate, status: "SCHEDULED", socialAccountTypes: accts.map((a) => TYPE[a.platform]), data }),
+          signal: AbortSignal.timeout(60_000),
+        });
+      } catch (e) {
+        // The posting service sometimes gets the same request twice and refuses the repeat by its referenceKey.
+        // The first one went through, so use that post instead of reporting a failure.
+        if (e instanceof SocialError && /referenceKey already exists/i.test(e.message)) {
+          const mine = await b<{ items?: RawPost[] }>(`/post/?teamId=${teamId}&orderBy=createdAt&order=DESC&limit=50`).catch(() => ({ items: [] as RawPost[] }));
+          const found = (mine.items ?? []).find((p) => p.referenceKey === key);
+          if (found) return found;
+        }
+        throw e;
+      }
     }),
   );
   // One team failing (a disconnected page, a platform hiccup) must not hide the posts that did go out to the others.
@@ -227,6 +239,19 @@ export async function createPost(i: PostInput): Promise<PostResult> {
 }
 
 /** Recent posts across the customer's slots, one entry per "Post" click. */
+/** The posting service allows this many posts per connected account per day. */
+export const DAILY_POST_CAP = 10;
+
+/** Posts sent to each account in the last 24 hours, so auto-post can skip accounts that have hit the daily cap. */
+export function postsLast24h(posts: PostResult[]): Map<string, number> {
+  const since = new Date(Date.now() - 86400_000).toISOString(), count = new Map<string, number>();
+  for (const p of posts) {
+    if ((p.scheduledFor ?? p.createdAt ?? "") < since) continue;
+    for (const x of p.platforms) if (x.accountId && x.status !== "failed") count.set(x.accountId, (count.get(x.accountId) ?? 0) + 1);
+  }
+  return count;
+}
+
 export async function listPosts(uid: string): Promise<PostResult[]> {
   const mine = await slots(uid);
   const all = (

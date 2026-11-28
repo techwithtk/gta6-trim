@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { clerkClient } from "@clerk/nextjs/server";
 import { PLATFORM_NAME } from "@/lib/postErrors";
-import { createPost, listAccounts, socialConfigured, SocialError } from "@/lib/bundle";
+import { createPost, DAILY_POST_CAP, listPosts, postsLast24h, listAccounts, socialConfigured, SocialError } from "@/lib/bundle";
 import { findActiveSubscription } from "@/lib/dodo";
 import { planById } from "@/lib/plans";
 import { worker } from "@/lib/worker";
@@ -46,13 +46,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Paused: ${paused.map((a) => `${PLATFORM_NAME[a.platform]} (${a.displayName})`).join(", ")} connection expired. Reconnect it in Integrations to resume auto-post.` }, { status: 409 });
     }
     if (!accounts.length) return NextResponse.json({ error: "None of the chosen accounts are connected anymore." }, { status: 400 });
+    // The posting service refuses more than DAILY_POST_CAP posts per account per day: skip full accounts instead of failing.
+    const sent = postsLast24h(await listPosts(b.uid).catch(() => []));
+    const full = live.filter((a) => (sent.get(a.id) ?? 0) >= DAILY_POST_CAP);
+    const ready = live.filter((a) => (sent.get(a.id) ?? 0) < DAILY_POST_CAP);
+    if (live.length && !ready.length) {
+      return NextResponse.json({ error: `Paused for today: ${[...new Set(full.map((a) => a.displayName))].join(", ")} already posted ${DAILY_POST_CAP} times in the last 24 hours (the daily limit). Auto-post resumes automatically.` }, { status: 429 });
+    }
 
     const fr = await worker(`/jobs/${b.jobId}/${b.file}?uid=${encodeURIComponent(b.uid)}&ttl=${7 * 86400}`, { signal: AbortSignal.timeout(30_000) }).catch(() => null);
     const videoUrl = fr && fr.ok ? ((await fr.json()) as { url?: string }).url : undefined;
     if (!videoUrl) return NextResponse.json({ error: "Clip not found." }, { status: 404 });
 
     const title = String(b.title ?? "").trim().slice(0, 100) || "GTA 6 moment";
-    const post = await createPost({ uid: b.uid, externalId: `${b.jobId}/${b.file}`, caption: String(b.caption ?? "").trim().slice(0, 2200) || `${title}\n\n#GTA6 #GTAVI #gaming #shorts`, title, videoUrl, accounts: live });
+    const post = await createPost({ uid: b.uid, externalId: `${b.jobId}/${b.file}`, caption: String(b.caption ?? "").trim().slice(0, 2200) || `${title}\n\n#GTA6 #GTAVI #gaming #shorts`, title, videoUrl, accounts: ready });
     await track("first_post", { uid: b.uid, anon: null, props: { auto: true } });
     return NextResponse.json({ post }, { status: 201 });
   } catch (e) {

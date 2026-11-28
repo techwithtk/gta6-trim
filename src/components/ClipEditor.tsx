@@ -8,7 +8,7 @@ import { refreshJobs } from "@/lib/jobs";
 type Word = [number, number, string];
 type Sticker = { t: number; emoji: string; spot: string };
 type Box = [number, number, number, number]; // x, y, w, h in source pixels
-type Boxes = { facecam: Box | null; gameplay: Box; frame?: [number, number]; mode?: "blur" };
+type Boxes = { facecam: Box | null; gameplay: Box; frame?: [number, number]; mode?: "blur" | "fit" };
 type Layout = { mode: "split" | "full" | "blur"; cam: Box | null; game: Box };
 type Data = { file: string; video: string; dur: number; start: number; end: number; hook: string; title: string; words: Word[]; editing: boolean; editError?: string | null; stickers?: Sticker[]; stickersOff?: boolean; boxes?: Boxes | null };
 
@@ -73,8 +73,9 @@ function Editor({ jobId, data, onClose }: { jobId: string; data: Data; onClose: 
   // Camera / gameplay boxes, in source pixels. Known straight away for clips that saved them; otherwise once the video loads.
   const savedFrame = data.boxes?.frame ?? null;
   const initial: Layout | null = data.boxes?.gameplay && savedFrame
-    ? { mode: data.boxes.mode === "blur" ? "blur" : data.boxes.facecam ? "split" : "full", cam: data.boxes.facecam ?? null,
-        game: data.boxes.mode === "blur" ? defaultGame(savedFrame[0], savedFrame[1], "full") : data.boxes.gameplay } : null;
+    ? { mode: data.boxes.mode === "blur" || data.boxes.mode === "fit" ? "blur" : data.boxes.facecam ? "split" : "full", cam: data.boxes.facecam ?? null,
+        game: data.boxes.mode === "blur" || data.boxes.mode === "fit" ? defaultGame(savedFrame[0], savedFrame[1], "full") : data.boxes.gameplay } : null;
+  const templated = data.boxes?.mode === "fit"; // Headline / Meme / Cinematic template: kept unless the layout is changed
   const [frame, setFrame] = useState<[number, number] | null>(savedFrame);
   const [layout, setLayout] = useState<Layout | null>(initial);
   const [base, setBase] = useState<Layout | null>(initial); // what the clip uses now, for Reset and "changed"
@@ -181,6 +182,7 @@ function Editor({ jobId, data, onClose }: { jobId: string; data: Data; onClose: 
           </div>
           <Frame video={video} src={data.video} frame={frame} layout={layout} onChange={setLayout}
             onTime={onTime} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onMeta={onMeta} />
+          {templated && sameLayout(layout, base) ? <p className="mt-1.5 text-[11px] text-muted">This clip uses a template (title bar and framing). Leave the layout as it is to keep the template; picking Split, Full or Blur replaces it.</p> : null}
           {!initial && sameLayout(layout, base) ? <p className="mt-1.5 text-[11px] text-muted">This clip was made before the layout editor, so it keeps its automatic layout unless you change the boxes. The preview shows a starting guess.</p> : null}
           <p className="mt-1.5 text-[11px] text-subtle">
             {layout?.mode === "blur"

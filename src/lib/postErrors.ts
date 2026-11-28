@@ -1,5 +1,7 @@
 /** Quick plain-words reading of common posting errors (the AI explainer covers the rest). */
 const RULES: { re: RegExp; reason: string; fix: string }[] = [
+  { re: /daily post limit/i, reason: "This account reached the daily limit of 10 posts.", fix: "It resets after 24 hours. Post again tomorrow, or spread posts out (auto-post every 2–3 hours stays under the limit)." },
+  { re: /referenceKey already exists/i, reason: "This post was sent twice, and the second copy was refused.", fix: "Nothing to do: the first copy went through. Check the account to confirm it's there." },
   { re: /token|expired|re-?auth|unauthori[sz]ed|permission|revoked|401|403/i, reason: "The connection to this account expired or lost permission.", fix: "Open Integrations, disconnect the account and connect it again, then retry." },
   { re: /business|creator|professional account/i, reason: "Instagram only allows posting to Business or Creator accounts.", fix: "In the Instagram app: Settings → Account type → switch to Creator or Business, then reconnect it." },
   { re: /duration|too long|too short|length/i, reason: "The video length isn't allowed on this platform.", fix: "Trim the clip in the editor (Shorts and Reels: under 90 seconds is safest), then post again." },

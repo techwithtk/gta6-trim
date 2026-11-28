@@ -58,13 +58,13 @@ export default function LivePage() {
     const get = (p: Platform, url: string) => fetch(url).then((r) => r.json()).then((d: Result) => live && setLists((l) => ({ ...l, [p]: d }))).catch(() => {});
     const load = () => { get("twitch", "/api/streams"); get("kick", "/api/streams/kick"); };
     load();
-    const t = setInterval(load, 60000);
+    const t = setInterval(() => { if (document.visibilityState === "visible") load(); }, 60000); // no polling in background tabs
     return () => { live = false; clearInterval(t); };
   }, []);
   const loadWatches = () => fetch("/api/watch", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((d) => d && setWatches(d.watches ?? [])).catch(() => {});
   useEffect(() => {
     loadWatches();
-    const t = setInterval(loadWatches, 60000);
+    const t = setInterval(() => { if (document.visibilityState === "visible") loadWatches(); }, 120000);
     return () => clearInterval(t);
   }, []);
   useEffect(() => {
@@ -483,7 +483,7 @@ function LiveHours({ recording }: { recording: number }) {
     let alive = true;
     const load = () => fetch("/api/live/usage", { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((d) => { if (alive && d) setU(d); }).catch(() => {});
     const first = setTimeout(load, 0);
-    const t = recording ? setInterval(load, 60_000) : null;
+    const t = recording ? setInterval(() => { if (document.visibilityState === "visible") load(); }, 120_000) : null;
     return () => { alive = false; clearTimeout(first); if (t) clearInterval(t); };
   }, [recording]);
   if (!u || !u.limitSec) return null;

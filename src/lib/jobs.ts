@@ -52,8 +52,8 @@ const emit = () => listeners.forEach((l) => l());
 const nextPollMs = () =>
   state.jobs.some((j) => j.status === "queued" || j.status === "running") ? 4000
   : state.jobs.some((j) => j.clips?.some((c) => c.editing)) ? 5000
-  : state.jobs.some((j) => j.status === "recording" || (j.kind === "live" && (j.processed ?? 0) < (j.chunks ?? 0))) ? 15000
-  : 30000;
+  : state.jobs.some((j) => j.status === "recording" || (j.kind === "live" && (j.processed ?? 0) < (j.chunks ?? 0))) ? 30000
+  : 60000;
 
 /** Fetch the signed-in user's jobs now. */
 export async function refreshJobs() {
@@ -68,7 +68,18 @@ export async function refreshJobs() {
 }
 
 /** Poll quickly while something is processing, slowly otherwise. One poller shared by the whole dashboard. */
+// A tab in the background doesn't poll (every poll costs server time); it catches up the moment it's visible again.
+const hidden = () => typeof document !== "undefined" && document.visibilityState === "hidden";
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (!started || hidden()) return;
+    if (timer) clearTimeout(timer);
+    loop();
+  });
+}
+
 function loop() {
+  if (hidden()) { timer = null; return; }
   refreshJobs().finally(() => {
     timer = setTimeout(loop, nextPollMs());
   });

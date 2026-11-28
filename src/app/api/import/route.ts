@@ -1,4 +1,5 @@
 import { trialCapError } from "@/lib/trial-server";
+import { isTemplate } from "@/lib/templates";
 import { NextResponse, type NextRequest } from "next/server";
 import { limitsFor, brandCapsFor, requirePlan, worker } from "@/lib/worker";
 import { track } from "@/lib/track-server";
@@ -12,10 +13,11 @@ export async function GET(req: NextRequest) {
   const r = await requirePlan(req);
   if ("error" in r) return r.error;
   try {
+    // Polled by every open dashboard: pass the worker's JSON straight through instead of parsing and re-encoding it.
     const res = await worker(`/jobs?uid=${encodeURIComponent(r.s.uid)}`);
-    const jobs = (await res.json()) as Job[];
-    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime() / 1000;
-    return NextResponse.json({ jobs, used: counted(jobs, monthStart), limits: limitsFor(r.s.plan) }, { headers: { "cache-control": "no-store" } });
+    const text = await res.text();
+    if (!res.ok) return new NextResponse(text, { status: res.status, headers: { "content-type": "application/json" } });
+    return new NextResponse(`{"jobs":${text}}`, { headers: { "content-type": "application/json", "cache-control": "no-store" } });
   } catch {
     return NextResponse.json({ error: "The clipping engine is offline right now. Try again soon." }, { status: 503 });
   }
@@ -25,7 +27,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const r = await requirePlan(req);
   if ("error" in r) return r.error;
-  const body = (await req.json().catch(() => ({}))) as { url?: string; upload?: string; title?: string; count?: number; rights?: boolean };
+  const body = (await req.json().catch(() => ({}))) as { url?: string; upload?: string; title?: string; count?: number; rights?: boolean; template?: string };
   if (!body.rights) return NextResponse.json({ error: "Confirm you have the rights to clip this video." }, { status: 400 });
   const limits = limitsFor(r.s.plan);
   const capped = await trialCapError(r.s.uid, r.s.trialEndsAt, "video");
@@ -44,6 +46,7 @@ export async function POST(req: NextRequest) {
         count: Math.min(20, Math.max(3, Number(body.count) || 6)),
         maxMinutes: limits.ytMaxMinutes,
         brandCaps: brandCapsFor(r.s.plan),
+        template: isTemplate(body.template) ? body.template : "auto",
       }),
     });
     if (res.ok) await track("first_clip", { uid: r.s.uid, props: { kind: "video" } });

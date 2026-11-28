@@ -7,6 +7,8 @@ import { Link2, Check, Loader2, Lock, AlertCircle, Clock, Upload, FileVideo, Sci
 import { Segmented, Toggle } from "@/components/forms";
 import { EASE, EASE_OUT, SPRING, SPRING_EVENT, T } from "@/components/motion";
 import { usePlan } from "@/lib/account";
+import { TemplatePicker } from "@/components/TemplatePicker";
+import { isTemplate, type TemplateId } from "@/lib/templates";
 import { addJob, monthUsage, useJobs, type Job } from "@/lib/jobs";
 import { ClipGrid, ClipPlayer } from "@/components/ClipGrid";
 import { TrimStudio } from "@/components/TrimStudio";
@@ -49,6 +51,12 @@ export default function MakeClipsPage() {
   const [url, setUrl] = useState("");
   const [touched, setTouched] = useState(false);
   const [count, setCount] = useState(6);
+  const [template, setTemplateState] = useState<TemplateId>("auto");
+  useEffect(() => { // remember the last template (after paint, so the effect doesn't set state synchronously)
+    const t = setTimeout(() => { try { const v = localStorage.getItem("gt_template"); if (isTemplate(v)) setTemplateState(v); } catch {} }, 0);
+    return () => clearTimeout(t);
+  }, []);
+  const setTemplate = (v: TemplateId) => { setTemplateState(v); try { localStorage.setItem("gt_template", v); } catch {} };
   const [autopost, setAutopost] = useState(false);
   const [rights, setRights] = useState(false);
   const [lookup, setLookup] = useState<{ vid: string; meta?: Meta; error?: string } | null>(null);
@@ -88,8 +96,8 @@ export default function MakeClipsPage() {
     setStarting(true); setStartError(null);
     try {
       const payload = source === "upload"
-        ? { upload: upload.key, title: file?.name.replace(/\.[^.]+$/, ""), count, rights }
-        : { url: `https://youtu.be/${vid}`, count, rights };
+        ? { upload: upload.key, title: file?.name.replace(/\.[^.]+$/, ""), count, rights, template }
+        : { url: `https://youtu.be/${vid}`, count, rights, template };
       const r = await fetch("/api/import", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error ?? "Couldn't start.");
@@ -270,6 +278,8 @@ export default function MakeClipsPage() {
               <span className="mb-2 block text-sm font-medium">How many clips</span>
               <Segmented value={String(count)} onChange={(v) => setCount(Number(v))} options={[["3", "3"], ["6", "6"], ["10", "10"], ["15", "15"]]} id="cnt" />
             </div>
+
+            <TemplatePicker value={template} onChange={setTemplate} />
 
             {plan.limits.autopost ? (
               <label className="flex cursor-pointer items-center justify-between gap-3 border border-line bg-surface-2 px-3 py-2.5">

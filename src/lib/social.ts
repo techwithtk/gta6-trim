@@ -39,7 +39,13 @@ export async function refreshAccounts() {
   }
 }
 
+const tabHidden = () => typeof document !== "undefined" && document.visibilityState === "hidden";
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => { if (started && !tabHidden()) refreshPosts(); });
+}
+
 export async function refreshPosts() {
+  if (tabHidden()) { if (timer) clearTimeout(timer); timer = null; return; } // resumes when the tab is visible
   try {
     const r = await fetch("/api/social/posts", { cache: "no-store" });
     if (r.ok) set({ posts: ((await r.json()).posts ?? []) as SocialPost[] });
